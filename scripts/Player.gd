@@ -8,11 +8,11 @@ const GUARD_MAX := 100.0
 
 const LIGHT := {
 	"windup": 0.10, "active": 0.10, "recovery": 0.20,
-	"damage": 5.0, "knockback": 160.0, "reach": Vector2(70, 80),
+	"damage": 5.0, "knockback": 160.0, "stun": 0.22, "reach": Vector2(70, 80),
 }
 const HEAVY := {
 	"windup": 0.35, "active": 0.12, "recovery": 0.35,
-	"damage": 12.0, "knockback": 300.0, "reach": Vector2(95, 95),
+	"damage": 12.0, "knockback": 300.0, "stun": 0.36, "reach": Vector2(95, 95),
 }
 
 signal died
@@ -39,6 +39,8 @@ var attack_phase := ""
 var attack_time := 0.0
 var hit_landed := false
 var input_locked := false
+var air_hits := 0
+var hurt_tilt := 0.0
 
 
 func _ready() -> void:
@@ -71,6 +73,8 @@ func _physics_process(delta: float) -> void:
 				state = State.IDLE
 
 	visual.modulate = Color(0.7, 0.7, 1.0) if state == State.BLOCK else Color.WHITE
+	var tilt_target := hurt_tilt if state == State.HURT else 0.0
+	visual.rotation = lerpf(visual.rotation, tilt_target, delta * 12.0)
 	move_and_slide()
 	_update_flash(delta)
 
@@ -130,20 +134,28 @@ func _check_hits() -> void:
 		var victim := area.get_parent()
 		if victim is Player and victim != self:
 			hit_landed = true
-			victim.take_hit(attack.damage, global_position.x, attack.knockback)
+			victim.take_hit(attack.damage, global_position.x, attack.knockback, attack.stun)
 
 
-func take_hit(dmg: float, source_x: float, kb: float) -> void:
+func take_hit(dmg: float, source_x: float, kb: float, stun: float) -> void:
 	if state == State.BLOCK:
-		_blocked_hit(dmg, source_x, kb)
+		_blocked_hit(dmg, source_x, kb, stun)
 		return
+
+	if not is_on_floor():
+		air_hits += 1
+		dmg = dmg * maxf(0.3, 1.0 - 0.15 * air_hits)
+		print("juggled x", air_hits)
+	else:
+		air_hits = 0.0
 
 	health -= dmg
 	state = State.HURT
-	hurt_timer = 0.25
+	hurt_timer = stun
 	_set_hitbox(false)
 	var dir_away := 1.0 if global_position.x >= source_x else -1.0
 	velocity = Vector2(dir_away * kb, -130.0)
+	hurt_tilt = dir_away * 0.16
 	visual.self_modulate = Color(3.0, 3.0, 3.0)
 	flash_timer = 0.12
 	Effects.hitstop(0.05 if dmg <= 6.0 else 0.09)
@@ -156,7 +168,7 @@ func take_hit(dmg: float, source_x: float, kb: float) -> void:
 		emit_signal("died")
 
 
-func _blocked_hit(dmg: float, source_x: float, kb: float) -> void:
+func _blocked_hit(dmg: float, source_x: float, kb: float, _stun: float) -> void:
 	health -= dmg * 0.15
 	guard -= dmg * 1.5
 	var dir_away := 1.0 if global_position.x >= source_x else -1.0
@@ -196,6 +208,9 @@ func reset(start_pos: Vector2) -> void:
 	hurt_timer = 0.0
 	flash_timer = 0.0
 	input_locked = true
+	air_hits = 0.0
+	hurt_tilt = 0.0
+	visual.rotation = 0.0
 	_set_hitbox(false)
 	visual.self_modulate = Color.WHITE
 	visual.modulate = Color.WHITE
