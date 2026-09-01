@@ -13,12 +13,20 @@ const LIMB_MAX := {
 }
 const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
 
-const HIGH_L := {"band": "high", "heavy": false, "windup": 0.12, "active": 0.08, "recovery": 0.20, "damage": 6.0, "knockback": 200.0, "stun": 0.24, "aim": -14.0, "reach": Vector2(80, 80), "swing": 0.9}
-const HIGH_H := {"band": "high", "heavy": true, "windup": 0.24, "active": 0.10, "recovery": 0.34, "damage": 11.0, "knockback": 320.0, "stun": 0.36, "aim": -14.0, "reach": Vector2(90, 90), "swing": 1.1}
-const MID_L := {"band": "mid", "heavy": false, "windup": 0.10, "active": 0.08, "recovery": 0.16, "damage": 5.0, "knockback": 180.0, "stun": 0.22, "aim": 0.0, "reach": Vector2(75, 75), "swing": 0.8}
-const MID_H := {"band": "mid", "heavy": true, "windup": 0.20, "active": 0.10, "recovery": 0.28, "damage": 9.0, "knockback": 300.0, "stun": 0.32, "aim": 0.0, "reach": Vector2(85, 85), "swing": 1.0}
-const LOW_L := {"band": "low", "heavy": false, "windup": 0.24, "active": 0.10, "recovery": 0.26, "damage": 8.0, "knockback": 260.0, "stun": 0.34, "aim": 14.0, "reach": Vector2(95, 100), "swing": 1.1}
-const LOW_H := {"band": "low", "heavy": true, "windup": 0.38, "active": 0.12, "recovery": 0.42, "damage": 14.0, "knockback": 400.0, "stun": 0.46, "aim": 14.0, "reach": Vector2(105, 110), "swing": 1.4}
+const ATTACKS := {
+	"high": {
+		false: {"band": "high", "heavy": false, "windup": 0.12, "active": 0.08, "recovery": 0.20, "damage": 6.0, "knockback": 200.0, "stun": 0.24, "aim": -14.0, "reach": Vector2(80, 80), "swing": 0.9},
+		true: {"band": "high", "heavy": true, "windup": 0.24, "active": 0.10, "recovery": 0.34, "damage": 11.0, "knockback": 320.0, "stun": 0.36, "aim": -14.0, "reach": Vector2(90, 90), "swing": 1.1},
+	},
+	"mid": {
+		false: {"band": "mid", "heavy": false, "windup": 0.10, "active": 0.08, "recovery": 0.16, "damage": 5.0, "knockback": 180.0, "stun": 0.22, "aim": 0.0, "reach": Vector2(75, 75), "swing": 0.8},
+		true: {"band": "mid", "heavy": true, "windup": 0.20, "active": 0.10, "recovery": 0.28, "damage": 9.0, "knockback": 300.0, "stun": 0.32, "aim": 0.0, "reach": Vector2(85, 85), "swing": 1.0},
+	},
+	"low": {
+		false: {"band": "low", "heavy": false, "windup": 0.24, "active": 0.10, "recovery": 0.26, "damage": 8.0, "knockback": 260.0, "stun": 0.34, "aim": 14.0, "reach": Vector2(95, 100), "swing": 1.1},
+		true: {"band": "low", "heavy": true, "windup": 0.38, "active": 0.12, "recovery": 0.42, "damage": 14.0, "knockback": 400.0, "stun": 0.46, "aim": 14.0, "reach": Vector2(105, 110), "swing": 1.4},
+	},
+}
 
 signal died
 
@@ -37,6 +45,7 @@ var guard := GUARD_MAX
 var limb_hp: Dictionary = {}
 var state: int = State.IDLE
 var facing := 1
+var stance := 1
 var hurt_timer := 0.0
 var flash_timer := 0.0
 var attack: Dictionary = {}
@@ -48,7 +57,6 @@ var air_hits := 0
 var hurt_tilt := 0.0
 var stick_was_up := false
 var attack_tween: Tween
-var stance := 1
 
 
 func _ready() -> void:
@@ -58,12 +66,11 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if Input.is_action_just_pressed(_action("stance")):
+	if not input_locked and Input.is_action_just_pressed(_action("stance")):
 		stance = -stance
 		_refresh_limb_colors()
 
 	_update_facing()
-
 	if not is_on_floor():
 		velocity.y += GRAVITY * delta
 
@@ -97,46 +104,35 @@ func _apply_idle() -> void:
 		return
 
 	var band := ""
-	for suffix in ["high", "mid", "low"]:
-		if Input.is_action_just_pressed(_action(suffix)):
-			band = suffix
+	for candidate in ["high", "mid", "low"]:
+		if Input.is_action_just_pressed(_action(candidate)):
+			band = candidate
 			break
 	if band != "":
 		var heavy := _heavy_held()
-		var data := _attack_data(band, heavy)
+		var data: Dictionary = _attack_data(band, heavy)
 		if _is_legless():
 			data["band"] = "low"
 			data["aim"] = 26.0
-		var swing := _swing_limb(data.band, heavy)
-		if swing != "":
-			data["name"] = swing
-			_start_attack(data)
+		var swing_limb := _attacking_limb(data.band, heavy)
+		if swing_limb == "":
+			_float_text(global_position + Vector2(0, -70.0), "NO LIMB", Color(1, 0.3, 0.3))
 		else:
-			var kind := "ARM" if data.band != "low" else "LEG"
-			_float_text(global_position + Vector2(0, -70.0), "NO %s" % kind, Color(1, 0.3, 0.3))
+			data["name"] = swing_limb
+			_start_attack(data)
 		return
 
 	velocity.x = _move_dir() * _move_speed()
 
 
 func _attack_data(band: String, heavy: bool) -> Dictionary:
-	match band:
-		"high":
-			return (HIGH_H if heavy else HIGH_L).duplicate()
-		"mid":
-			return (MID_H if heavy else MID_L).duplicate()
-		"low":
-			return (LOW_H if heavy else LOW_L).duplicate()
-	return MID_L.duplicate()
+	return ATTACKS[band][heavy].duplicate()
 
 
-func _swing_limb(band: String, heavy: bool) -> String:
-	var front := front_side()
-	var back := "l" if front == "r" else "r"
-	var side := back if heavy else front
+func _attacking_limb(band: String, heavy: bool) -> String:
+	var side := _rear_side() if heavy else front_side()
 	var limb_class := "arm" if band == "high" or band == "mid" else "leg"
 	var limb := limb_class + "_" + side
-
 	if _limb_available(limb):
 		return limb
 	if band == "low" and _is_legless():
@@ -152,12 +148,12 @@ func _start_attack(data: Dictionary) -> void:
 	attack_phase = "windup"
 	attack_time = 0.0
 	hit_landed = false
-	var reach: Vector2 = data.reach
+	var reach: Vector2 = attack.reach
 	hitbox_shape.shape.size = reach
 	hitbox.position.x = facing * (reach.x / 2.0 + 30.0)
-	hitbox.position.y = data.aim
+	hitbox.position.y = attack.aim
 	_set_hitbox(false)
-	_anim_attack(data)
+	_anim_attack(attack)
 
 
 func _anim_attack(data: Dictionary) -> void:
@@ -198,39 +194,37 @@ func _check_hits() -> void:
 			continue
 		hit_landed = true
 		var target: String = _pick_target(victim, attack.band)
-		victim.take_part_hit(target, attack.damage, global_position.x, attack.knockback, attack.stun)
+		victim.take_part_hit(target, attack.band, attack.damage, global_position.x, attack.knockback, attack.stun)
 		return
 
 
 func _pick_target(victim, band: String) -> String:
-	for name in _target_priority(victim, band):
+	var front: String = victim.front_side()
+	var rear := "l" if front == "r" else "r"
+	var priority: Array
+
+	if victim._is_legless():
+		match band:
+			"high", "mid":
+				priority = ["head", "torso"]
+			"low":
+				priority = ["arm_" + front, "torso"]
+	else:
+		match band:
+			"high":
+				priority = ["head", "torso"]
+			"mid":
+				priority = ["arm_" + front, "torso"]
+			"low":
+				priority = ["leg_" + front, "leg_" + rear, "torso"]
+
+	for name in priority:
 		if not victim.limb_hp[name].gone:
 			return name
 	return "torso"
 
 
-func _target_priority(victim, band: String) -> Array:
-	var lead: String = victim.front_side()
-	var rear := "l" if lead == "r" else "r"
-	if victim._is_legless():
-		match band:
-			"high":
-				return ["head", "torso"]
-			"mid":
-				return ["head", "torso"]
-			"low":
-				return ["arm_" + lead, "torso"]
-	match band:
-		"high":
-			return ["head", "torso"]
-		"mid":
-			return ["arm_" + lead, "torso"]
-		"low":
-			return ["leg_" + lead, "leg_" + rear, "torso"]
-	return ["torso"]
-
-
-func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, stun: float) -> void:
+func take_part_hit(limb_name: String, band: String, dmg: float, source_x: float, kb: float, stun: float) -> void:
 	if _is_blocking():
 		_blocked_hit(dmg, source_x, kb, stun)
 		return
@@ -242,24 +236,23 @@ func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, st
 
 	if not is_on_floor():
 		air_hits += 1
-		dmg = dmg * maxf(0.3, 1.0 - 0.15 * air_hits)
-		print("juggled x", air_hits)
+		dmg *= maxf(0.3, 1.0 - 0.15 * air_hits)
 	else:
-		air_hits = 0.0
+		air_hits = 0
 
-	if limb_name == "torso":
+	if limb_name == "torso" and band == "mid":
 		dmg *= _torso_mult()
 
 	limb.hp -= dmg
-	if limb_name == "torso" or limb_name == "head":
+	if limb_name == "torso":
 		health -= dmg
 
+	var hit_position := _get_limb_hurtbox(limb_name).global_position
 	if limb.hp <= 0.0:
 		limb.gone = true
 		_get_limb_body(limb_name).visible = false
 		Effects.add_shake(8.0)
-		_float_text(_get_limb_hurtbox(limb_name).global_position, "%s LOST!" % limb_name.to_upper(), Color(1, 0.4, 0.2))
-		print("LIMB LOST: ", limb_name)
+		_float_text(hit_position, "%s LOST!" % limb_name.to_upper(), Color(1, 0.4, 0.2))
 
 	state = State.HURT
 	hurt_timer = stun
@@ -268,11 +261,10 @@ func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, st
 	velocity = Vector2(dir_away * kb * SCALE, -130.0 * SCALE)
 	hurt_tilt = dir_away * 0.16
 	_flash_limb(limb_name)
-	_spawn_impact(_get_limb_hurtbox(limb_name).global_position)
-	_float_text(_get_limb_hurtbox(limb_name).global_position, "-%d %s" % [roundi(dmg), limb_name], Color(1, 0.9, 0.3))
+	_spawn_impact(hit_position)
+	_float_text(hit_position, "-%d %s" % [roundi(dmg), limb_name], Color(1, 0.9, 0.3))
 	Effects.hitstop(0.05 if dmg <= 6.0 else 0.09)
 	Effects.add_shake(3.0 if dmg <= 6.0 else 7.0)
-	print("HIT dmg=", dmg, " -> ", limb_name, " | hp=", health)
 
 	if _is_ko():
 		health = maxf(health, 0.0)
@@ -291,7 +283,6 @@ func _blocked_hit(dmg: float, source_x: float, kb: float, _stun: float) -> void:
 	_float_text(global_position + Vector2(0, -110.0), "BLOCK", Color(0.4, 0.6, 1.0))
 	Effects.hitstop(0.03)
 	Effects.add_shake(2.0)
-	print("BLOCKED chip=", dmg * 0.15, " guard=", guard)
 	if guard <= 0.0:
 		guard = GUARD_MAX
 		state = State.HURT
@@ -299,7 +290,6 @@ func _blocked_hit(dmg: float, source_x: float, kb: float, _stun: float) -> void:
 		velocity = Vector2(dir_away * kb * 1.2 * SCALE, -150.0 * SCALE)
 		_float_text(global_position + Vector2(0, -150.0), "GUARD BREAK!", Color(1, 0.2, 0.2))
 		Effects.add_shake(9.0)
-		print("GUARD BREAK!")
 
 
 func _interrupt_attack() -> void:
@@ -339,7 +329,7 @@ func _limb_color(name: String) -> Color:
 		return body_color.lightened(0.15)
 	if name == "torso":
 		return body_color
-	var front := "r" if stance == 1 else "l"
+	var front := front_side()
 	if name.ends_with("_" + front):
 		return body_color.lightened(0.10)
 	return body_color.darkened(0.10)
@@ -361,16 +351,12 @@ func _limb_available(name: String) -> bool:
 	return not limb_hp[name].gone
 
 
-func _has_arm() -> bool:
-	return not (limb_hp["arm_l"].gone and limb_hp["arm_r"].gone)
-
-
-func _has_leg() -> bool:
-	return not (limb_hp["leg_l"].gone and limb_hp["leg_r"].gone)
-
-
 func front_side() -> String:
 	return "r" if stance == 1 else "l"
+
+
+func _rear_side() -> String:
+	return "l" if front_side() == "r" else "r"
 
 
 func _torso_mult() -> float:
@@ -413,11 +399,12 @@ func reset(start_pos: Vector2) -> void:
 	hurt_timer = 0.0
 	flash_timer = 0.0
 	input_locked = true
-	air_hits = 0.0
+	air_hits = 0
 	hurt_tilt = 0.0
 	stick_was_up = false
 	stance = 1
 	rig.rotation = 0.0
+	rig.position = Vector2.ZERO
 	_set_hitbox(false)
 	rig.self_modulate = Color.WHITE
 	rig.modulate = Color.WHITE
@@ -487,8 +474,7 @@ func _jump_pressed() -> bool:
 func _heavy_held() -> bool:
 	if Input.is_action_pressed(_action("heavy")):
 		return true
-	var trigger := Input.get_joy_axis(_pad_device(), JOY_AXIS_TRIGGER_RIGHT)
-	return trigger > 0.5
+	return Input.get_joy_axis(_pad_device(), JOY_AXIS_TRIGGER_RIGHT) > 0.5
 
 
 func _is_blocking() -> bool:
