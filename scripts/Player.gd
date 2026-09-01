@@ -42,7 +42,6 @@ enum State { IDLE, ATTACK, HURT, KO }
 @onready var face: ColorRect = $Rig/Face
 @onready var hitbox: Area2D = $Hitbox
 @onready var hitbox_shape: CollisionShape2D = $Hitbox/HitboxShape
-@onready var hitbox_debug: ColorRect = $Hitbox/DebugRect
 
 var health := 100.0
 var guard := GUARD_MAX
@@ -246,7 +245,6 @@ func _update_flash(delta: float) -> void:
 
 func _set_hitbox(active: bool) -> void:
 	hitbox_shape.disabled = not active
-	hitbox_debug.visible = active
 
 
 func _flash_limb(limb_name: String) -> void:
@@ -408,8 +406,9 @@ func _update_facing() -> void:
 	if opponent == null:
 		return
 	facing = 1 if opponent.global_position.x >= global_position.x else -1
-	face.offset_left = 16.0 * facing
-	face.offset_right = face.offset_left + 8.0
+	var f := float(facing)
+	face.offset_left = 2.0 if f > 0.0 else -8.0
+	face.offset_right = face.offset_left + 6.0
 
 
 func _find_opponent() -> Node:

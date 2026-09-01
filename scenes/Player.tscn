@@ -9,16 +9,16 @@ size = Vector2(60, 80)
 size = Vector2(70, 80)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_head"]
-size = Vector2(20, 16)
+size = Vector2(18, 16)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_torso"]
-size = Vector2(28, 24)
+size = Vector2(26, 24)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_arm"]
-size = Vector2(16, 22)
+size = Vector2(8, 20)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_leg"]
-size = Vector2(12, 40)
+size = Vector2(10, 38)
 
 [node name="Player" type="CharacterBody2D" groups=["players"]]
 collision_layer = 1
@@ -34,9 +34,9 @@ shape = SubResource("RectangleShape2D_player")
 position = Vector2(0, -24)
 
 [node name="Body" type="ColorRect" parent="Rig/head"]
-offset_left = -10.0
+offset_left = -9.0
 offset_top = -16.0
-offset_right = 10.0
+offset_right = 9.0
 offset_bottom = 0.0
 color = Color(0.9, 0.35, 0.35, 1)
 
@@ -51,12 +51,12 @@ monitoring = false
 shape = SubResource("RectangleShape2D_head")
 
 [node name="torso" type="Node2D" parent="Rig"]
-position = Vector2(0, -12)
+position = Vector2(0, -10)
 
 [node name="Body" type="ColorRect" parent="Rig/torso"]
-offset_left = -14.0
+offset_left = -13.0
 offset_top = -12.0
-offset_right = 14.0
+offset_right = 13.0
 offset_bottom = 12.0
 color = Color(0.85, 0.2, 0.2, 1)
 
@@ -71,17 +71,17 @@ monitoring = false
 shape = SubResource("RectangleShape2D_torso")
 
 [node name="arm_l" type="Node2D" parent="Rig"]
-position = Vector2(-20, -20)
+position = Vector2(-18, -18)
 
 [node name="Body" type="ColorRect" parent="Rig/arm_l"]
-offset_left = -2.0
-offset_top = -2.0
-offset_right = 14.0
+offset_left = -4.0
+offset_top = 0.0
+offset_right = 4.0
 offset_bottom = 20.0
 color = Color(0.7, 0.17, 0.17, 1)
 
 [node name="Hurtbox" type="Area2D" parent="Rig/arm_l"]
-position = Vector2(6, 9)
+position = Vector2(0, 10)
 collision_layer = 4
 collision_mask = 0
 monitorable = true
@@ -91,17 +91,17 @@ monitoring = false
 shape = SubResource("RectangleShape2D_arm")
 
 [node name="arm_r" type="Node2D" parent="Rig"]
-position = Vector2(6, -20)
+position = Vector2(18, -18)
 
 [node name="Body" type="ColorRect" parent="Rig/arm_r"]
-offset_left = -2.0
-offset_top = -2.0
-offset_right = 14.0
+offset_left = -4.0
+offset_top = 0.0
+offset_right = 4.0
 offset_bottom = 20.0
 color = Color(0.7, 0.17, 0.17, 1)
 
 [node name="Hurtbox" type="Area2D" parent="Rig/arm_r"]
-position = Vector2(6, 9)
+position = Vector2(0, 10)
 collision_layer = 4
 collision_mask = 0
 monitorable = true
@@ -111,17 +111,17 @@ monitoring = false
 shape = SubResource("RectangleShape2D_arm")
 
 [node name="leg_l" type="Node2D" parent="Rig"]
-position = Vector2(-13, 0)
+position = Vector2(-7, 2)
 
 [node name="Body" type="ColorRect" parent="Rig/leg_l"]
-offset_left = 0.0
+offset_left = -5.0
 offset_top = 0.0
-offset_right = 12.0
-offset_bottom = 40.0
+offset_right = 5.0
+offset_bottom = 38.0
 color = Color(0.6, 0.14, 0.14, 1)
 
 [node name="Hurtbox" type="Area2D" parent="Rig/leg_l"]
-position = Vector2(6, 20)
+position = Vector2(0, 19)
 collision_layer = 4
 collision_mask = 0
 monitorable = true
@@ -131,17 +131,17 @@ monitoring = false
 shape = SubResource("RectangleShape2D_leg")
 
 [node name="leg_r" type="Node2D" parent="Rig"]
-position = Vector2(1, 0)
+position = Vector2(7, 2)
 
 [node name="Body" type="ColorRect" parent="Rig/leg_r"]
-offset_left = 0.0
+offset_left = -5.0
 offset_top = 0.0
-offset_right = 12.0
-offset_bottom = 40.0
+offset_right = 5.0
+offset_bottom = 38.0
 color = Color(0.6, 0.14, 0.14, 1)
 
 [node name="Hurtbox" type="Area2D" parent="Rig/leg_r"]
-position = Vector2(6, 20)
+position = Vector2(0, 19)
 collision_layer = 4
 collision_mask = 0
 monitorable = true
@@ -151,10 +151,10 @@ monitoring = false
 shape = SubResource("RectangleShape2D_leg")
 
 [node name="Face" type="ColorRect" parent="Rig"]
-offset_left = 16.0
+offset_left = 2.0
 offset_top = -34.0
-offset_right = 24.0
-offset_bottom = -26.0
+offset_right = 8.0
+offset_bottom = -30.0
 color = Color(0.95, 0.95, 0.95, 1)
 
 [node name="Hitbox" type="Area2D" parent="."]
@@ -165,11 +165,3 @@ monitoring = true
 
 [node name="HitboxShape" type="CollisionShape2D" parent="Hitbox"]
 shape = SubResource("RectangleShape2D_hit")
-
-[node name="DebugRect" type="ColorRect" parent="Hitbox"]
-offset_left = -35.0
-offset_top = -40.0
-offset_right = 35.0
-offset_bottom = 40.0
-color = Color(1, 0.9, 0.2, 0.5)
-visible = false
