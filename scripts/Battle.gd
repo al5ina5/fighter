@@ -2,6 +2,8 @@ extends Node2D
 
 @onready var p1_bar: ProgressBar = $HUD/P1Bar
 @onready var p2_bar: ProgressBar = $HUD/P2Bar
+@onready var p1_guard: ProgressBar = $HUD/P1Guard
+@onready var p2_guard: ProgressBar = $HUD/P2Guard
 @onready var ko_label: Label = $HUD/KOLabel
 
 var player1
@@ -21,6 +23,8 @@ func _physics_process(_delta: float) -> void:
 	if player1 != null and player2 != null:
 		p1_bar.value = maxf(player1.health, 0.0)
 		p2_bar.value = maxf(player2.health, 0.0)
+		p1_guard.value = maxf(player1.guard, 0.0)
+		p2_guard.value = maxf(player2.guard, 0.0)
 
 
 func _on_ko(winner) -> void:

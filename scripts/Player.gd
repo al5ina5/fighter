@@ -4,6 +4,7 @@ class_name Player
 const SPEED := 300.0
 const JUMP_VELOCITY := -400.0
 const GRAVITY := 980.0
+const GUARD_MAX := 100.0
 
 const LIGHT := {
 	"windup": 0.10, "active": 0.10, "recovery": 0.20,
@@ -16,7 +17,7 @@ const HEAVY := {
 
 signal died
 
-enum State { IDLE, ATTACK, HURT, KO }
+enum State { IDLE, ATTACK, HURT, KO, BLOCK }
 
 @export var player_number: int = 1
 @export var body_color: Color = Color(0.85, 0.2, 0.2)
@@ -28,6 +29,7 @@ enum State { IDLE, ATTACK, HURT, KO }
 @onready var hitbox_debug: ColorRect = $Hitbox/DebugRect
 
 var health := 100.0
+var guard := GUARD_MAX
 var state: int = State.IDLE
 var facing := 1
 var hurt_timer := 0.0
@@ -62,12 +64,20 @@ func _physics_process(delta: float) -> void:
 				state = State.IDLE
 		State.KO:
 			velocity.x *= 0.9
+		State.BLOCK:
+			velocity.x = 0.0
+			if not _block_held() or not is_on_floor():
+				state = State.IDLE
 
+	visual.modulate = Color(0.7, 0.7, 1.0) if state == State.BLOCK else Color.WHITE
 	move_and_slide()
 	_update_flash(delta)
 
 
 func _apply_idle() -> void:
+	if _block_held() and is_on_floor():
+		state = State.BLOCK
+		return
 	if _jump_pressed() and is_on_floor():
 		velocity.y = JUMP_VELOCITY
 		return
@@ -120,6 +130,10 @@ func _check_hits() -> void:
 
 
 func take_hit(dmg: float, source_x: float, kb: float) -> void:
+	if state == State.BLOCK:
+		_blocked_hit(dmg, source_x, kb)
+		return
+
 	health -= dmg
 	state = State.HURT
 	hurt_timer = 0.25
@@ -136,6 +150,25 @@ func take_hit(dmg: float, source_x: float, kb: float) -> void:
 		state = State.KO
 		Effects.add_shake(12.0)
 		emit_signal("died")
+
+
+func _blocked_hit(dmg: float, source_x: float, kb: float) -> void:
+	health -= dmg * 0.15
+	guard -= dmg * 1.5
+	var dir_away := 1.0 if global_position.x >= source_x else -1.0
+	velocity = Vector2(dir_away * kb * 0.4, 0.0)
+	visual.self_modulate = Color(1.5, 1.5, 1.5)
+	flash_timer = 0.08
+	Effects.hitstop(0.03)
+	Effects.add_shake(2.0)
+	print("BLOCKED chip=", dmg * 0.15, " guard=", guard)
+	if guard <= 0.0:
+		guard = GUARD_MAX
+		state = State.HURT
+		hurt_timer = 0.6
+		velocity = Vector2(dir_away * kb * 1.2, -150.0)
+		Effects.add_shake(9.0)
+		print("GUARD BREAK!")
 
 
 func _update_flash(delta: float) -> void:
@@ -168,6 +201,10 @@ func _light_pressed() -> bool:
 
 func _heavy_pressed() -> bool:
 	return Input.is_action_just_pressed(_action("heavy"))
+
+
+func _block_held() -> bool:
+	return Input.is_action_pressed(_action("block"))
 
 
 func _action(name: String) -> StringName:
