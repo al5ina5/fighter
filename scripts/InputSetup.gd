@@ -2,9 +2,14 @@ extends Node
 
 
 func _ready() -> void:
-	_setup_action("move_left", [KEY_A, KEY_LEFT])
-	_setup_action("move_right", [KEY_D, KEY_RIGHT])
-	_setup_action("jump", [KEY_SPACE, KEY_W, KEY_UP])
+	# Player 1 — keyboard (WASD) + controller slot 0
+	_setup_action("p1_move_left", [KEY_A])
+	_setup_action("p1_move_right", [KEY_D])
+	_setup_action("p1_jump", [KEY_W, KEY_SPACE])
+	# Player 2 — keyboard (arrows) + controller slot 1
+	_setup_action("p2_move_left", [KEY_LEFT])
+	_setup_action("p2_move_right", [KEY_RIGHT])
+	_setup_action("p2_jump", [KEY_UP, KEY_ENTER])
 
 
 func _setup_action(action: StringName, keys: Array) -> void:
