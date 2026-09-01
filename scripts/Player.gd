@@ -177,7 +177,7 @@ func _check_hits() -> void:
 		if victim == null or victim == self:
 			continue
 		hit_landed = true
-		var base_target: String = attack.side + "_" + attack.target_class
+		var base_target: String = attack.target_class + "_" + attack.side
 		var target: String = _fallback_target(victim, base_target)
 		victim.take_part_hit(target, attack.damage, global_position.x, attack.knockback, attack.stun)
 		return
@@ -208,6 +208,7 @@ func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, st
 		limb.gone = true
 		_get_limb_body(limb_name).visible = false
 		Effects.add_shake(8.0)
+		_float_text(_get_limb_hurtbox(limb_name).global_position, "%s LOST!" % limb_name.to_upper(), Color(1, 0.4, 0.2))
 		print("LIMB LOST: ", limb_name)
 
 	state = State.HURT
@@ -218,6 +219,7 @@ func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, st
 	hurt_tilt = dir_away * 0.16
 	_flash_limb(limb_name)
 	_spawn_impact(_get_limb_hurtbox(limb_name).global_position)
+	_float_text(_get_limb_hurtbox(limb_name).global_position, "-%d %s" % [roundi(dmg), limb_name], Color(1, 0.9, 0.3))
 	Effects.hitstop(0.05 if dmg <= 6.0 else 0.09)
 	Effects.add_shake(3.0 if dmg <= 6.0 else 7.0)
 	print("HIT dmg=", dmg, " -> ", limb_name, " | hp=", health)
@@ -236,6 +238,7 @@ func _blocked_hit(dmg: float, source_x: float, kb: float, _stun: float) -> void:
 	velocity = Vector2(dir_away * kb * 0.4 * SCALE, 0.0)
 	rig.self_modulate = Color(1.5, 1.5, 1.5)
 	flash_timer = 0.08
+	_float_text(global_position + Vector2(0, -110.0), "BLOCK", Color(0.4, 0.6, 1.0))
 	Effects.hitstop(0.03)
 	Effects.add_shake(2.0)
 	print("BLOCKED chip=", dmg * 0.15, " guard=", guard)
@@ -244,6 +247,7 @@ func _blocked_hit(dmg: float, source_x: float, kb: float, _stun: float) -> void:
 		state = State.HURT
 		hurt_timer = 0.6
 		velocity = Vector2(dir_away * kb * 1.2 * SCALE, -150.0 * SCALE)
+		_float_text(global_position + Vector2(0, -150.0), "GUARD BREAK!", Color(1, 0.2, 0.2))
 		Effects.add_shake(9.0)
 		print("GUARD BREAK!")
 
@@ -286,6 +290,22 @@ func _spawn_impact(pos: Vector2) -> void:
 	tw.tween_property(burst, "scale", Vector2(1.7, 1.7), 0.12)
 	tw.parallel().tween_property(burst, "modulate:a", 0.0, 0.12)
 	tw.tween_callback(burst.queue_free)
+
+
+func _float_text(pos: Vector2, text: String, color: Color) -> void:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 34)
+	label.add_theme_color_override("font_color", color)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.size = Vector2(240, 60)
+	label.position = pos - Vector2(120, 30)
+	label.z_index = 6
+	get_parent().add_child(label)
+	var tw := create_tween()
+	tw.tween_property(label, "position", label.position + Vector2(0, -70), 0.6)
+	tw.parallel().tween_property(label, "modulate:a", 0.0, 0.6)
+	tw.tween_callback(label.queue_free)
 
 
 func _setup_limbs() -> void:
