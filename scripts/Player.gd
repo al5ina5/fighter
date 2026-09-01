@@ -107,7 +107,7 @@ func _apply_idle() -> void:
 		if _is_legless():
 			data["band"] = "low"
 			data["aim"] = 26.0
-		var swing := _swing_limb(data.band, heavy)
+		var swing := _swing_limb(data.band)
 		if swing != "":
 			data["name"] = swing
 			_start_attack(data)
@@ -130,10 +130,10 @@ func _attack_data(band: String, heavy: bool) -> Dictionary:
 	return MID_L.duplicate()
 
 
-func _swing_limb(band: String, heavy: bool) -> String:
+func _swing_limb(band: String) -> String:
 	var near := "r" if facing == 1 else "l"
 	var far := "l" if near == "r" else "r"
-	var order: Array = [near, far] if not heavy else [far, near]
+	var order: Array = [near, far]
 	if band == "high" or band == "mid":
 		for side in order:
 			if _limb_available("arm_" + side):
@@ -199,21 +199,20 @@ func _check_hits() -> void:
 		if victim == null or victim == self:
 			continue
 		hit_landed = true
-		var target: String = _pick_target(victim, attack.band, attack.heavy)
+		var target: String = _pick_target(victim, attack.band)
 		victim.take_part_hit(target, attack.damage, global_position.x, attack.knockback, attack.stun)
 		return
 
 
-func _pick_target(victim, band: String, heavy: bool) -> String:
-	for name in _target_priority(victim, band, heavy):
+func _pick_target(victim, band: String) -> String:
+	for name in _target_priority(victim, band):
 		if not victim.limb_hp[name].gone:
 			return name
 	return "torso"
 
 
-func _target_priority(victim, band: String, heavy: bool) -> Array:
-	var front: String = victim.front_side()
-	var back := "l" if front == "r" else "r"
+func _target_priority(victim, band: String) -> Array:
+	var closer := "l" if global_position.x < victim.global_position.x else "r"
 	if victim._is_legless():
 		match band:
 			"high":
@@ -221,20 +220,14 @@ func _target_priority(victim, band: String, heavy: bool) -> Array:
 			"mid":
 				return ["head", "torso"]
 			"low":
-				if heavy:
-					return ["arm_" + back, "arm_" + front, "torso"]
-				return ["arm_" + front, "arm_" + back, "torso"]
+				return ["arm_" + closer, "torso"]
 	match band:
 		"high":
 			return ["head", "torso"]
 		"mid":
-			if heavy:
-				return ["arm_" + back, "arm_" + front, "torso"]
-			return ["arm_" + front, "arm_" + back, "torso"]
+			return ["arm_" + closer, "torso"]
 		"low":
-			if heavy:
-				return ["leg_" + back, "leg_" + front, "torso"]
-			return ["leg_" + front, "leg_" + back, "torso"]
+			return ["leg_" + closer, "torso"]
 	return ["torso"]
 
 
