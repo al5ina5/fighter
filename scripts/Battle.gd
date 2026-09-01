@@ -4,8 +4,7 @@ const PLAYER_TS := preload("res://scenes/Player.tscn")
 
 enum Phase { COUNTDOWN, FIGHT, KO }
 
-const LIMB_LIST := ["arm_l", "arm_r", "leg_l", "leg_r"]
-const LIMB_MAX_HP := 40.0
+const LIMB_LIST := ["head", "arm_l", "arm_r", "leg_l", "leg_r"]
 
 @onready var p1_bar: ProgressBar = $HUD/P1Bar
 @onready var p2_bar: ProgressBar = $HUD/P2Bar
@@ -99,7 +98,7 @@ func _build_limb_hud() -> void:
 
 func _build_limb_row(body_color: Color, x0: float, store: Dictionary) -> void:
 	var y := 60.0
-	var w := 140.0
+	var w := 110.0
 	var h := 8.0
 	var gap := 6.0
 	for i in LIMB_LIST.size():
@@ -116,9 +115,19 @@ func _build_limb_row(body_color: Color, x0: float, store: Dictionary) -> void:
 		fill.size = Vector2(w - 2, h - 2)
 		$HUD.add_child(fill)
 		store[name] = fill
+		var label := Label.new()
+		label.text = {"head": "HEAD", "arm_l": "L ARM", "arm_r": "R ARM", "leg_l": "L LEG", "leg_r": "R LEG"}[name]
+		label.position = Vector2(bx, y + 10.0)
+		label.size = Vector2(w, 20.0)
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", 13)
+		label.add_theme_color_override("font_color", Color(0.78, 0.78, 0.84))
+		$HUD.add_child(label)
 
 
 func _limb_color(base: Color, name: String) -> Color:
+	if name == "head":
+		return Color(1.0, 0.35, 0.25)
 	if name == "arm_r" or name == "leg_r":
 		return base.darkened(0.2)
 	return base.lightened(0.05)
@@ -132,7 +141,7 @@ func _update_limb_bars(store: Dictionary, player) -> void:
 			fill.visible = false
 		else:
 			fill.visible = true
-			fill.size.x = (140.0 - 2.0) * clampf(data.hp / LIMB_MAX_HP, 0.0, 1.0)
+			fill.size.x = (110.0 - 2.0) * clampf(data.hp / float(Player.LIMB_MAX[name]), 0.0, 1.0)
 
 
 func _spawn_players() -> void:
@@ -159,18 +168,6 @@ func _physics_process(_delta: float) -> void:
 		p2_guard.value = maxf(player2.guard, 0.0)
 		_update_limb_bars(p1_bars, player1)
 		_update_limb_bars(p2_bars, player2)
-		_separate_players()
-
-
-func _separate_players() -> void:
-	if not (player1.is_on_floor() and player2.is_on_floor()):
-		return
-	var dx: float = player2.global_position.x - player1.global_position.x
-	if absf(dx) < 200.0:
-		var dir: float = 1.0 if dx >= 0.0 else -1.0
-		var push: float = (200.0 - absf(dx)) / 2.0
-		player1.global_position.x -= dir * push
-		player2.global_position.x += dir * push
 
 
 func _process(_delta: float) -> void:

@@ -18,7 +18,7 @@ func _init() -> void:
 
 func _test_source_limb_selection() -> void:
 	_expect_eq(CombatRules.source_limb("high", false, 1), "arm_r", "right-lead normal high")
-	_expect_eq(CombatRules.source_limb("high", true, 1), "arm_l", "right-lead heavy high")
+	_expect_eq(CombatRules.source_limb("high", true, 1), "leg_l", "right-lead heavy high kick")
 	_expect_eq(CombatRules.source_limb("mid", false, -1), "arm_l", "left-lead normal mid")
 	_expect_eq(CombatRules.source_limb("mid", true, -1), "arm_r", "left-lead heavy mid")
 	_expect_eq(CombatRules.source_limb("low", false, 1), "leg_r", "right-lead normal low")

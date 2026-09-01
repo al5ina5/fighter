@@ -6,7 +6,11 @@ const SPEED := 300.0 * SCALE
 const JUMP_VELOCITY := -400.0 * SCALE
 const GRAVITY := 980.0 * SCALE
 const GUARD_MAX := 100.0
-const STANCE_POSE_SPEED := 180.0
+const STANCE_POSE_SPEED := 220.0
+const STANCE_TRANSITION_DURATION := 0.18
+const INPUT_BUFFER_DURATION := 0.12
+const ARM_LENGTH := 20.0
+const LEG_LENGTH := 38.0
 
 const LIMB_MAX := {
 	"head": 30.0, "torso": 100.0, "arm_l": 40.0, "arm_r": 40.0,
@@ -15,22 +19,22 @@ const LIMB_MAX := {
 const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
 const ATTACKS := {
 	"high": {
-		false: {"band": "high", "heavy": false, "windup": 0.12, "active": 0.08, "recovery": 0.20, "damage": 6.0, "knockback": 200.0, "stun": 0.24, "aim": -14.0, "reach": Vector2(80, 80), "swing": 0.9},
-		true: {"band": "high", "heavy": true, "windup": 0.24, "active": 0.10, "recovery": 0.34, "damage": 11.0, "knockback": 320.0, "stun": 0.36, "aim": -14.0, "reach": Vector2(90, 90), "swing": 1.1},
+		false: {"band": "high", "heavy": false, "windup": 0.15, "active": 0.05, "recovery": 0.34, "damage": 6.0, "knockback": 200.0, "stun": 0.24, "contact_size": Vector2(14, 10), "extension": 2.4, "swing": 1.82, "forward_speed": 30.0},
+		true: {"band": "high", "heavy": true, "windup": 0.34, "active": 0.06, "recovery": 0.52, "damage": 14.0, "knockback": 380.0, "stun": 0.46, "contact_size": Vector2(14, 10), "extension": 2.05, "swing": 2.02, "forward_speed": 20.0},
 	},
 	"mid": {
-		false: {"band": "mid", "heavy": false, "windup": 0.10, "active": 0.08, "recovery": 0.16, "damage": 5.0, "knockback": 180.0, "stun": 0.22, "aim": 0.0, "reach": Vector2(75, 75), "swing": 0.8},
-		true: {"band": "mid", "heavy": true, "windup": 0.20, "active": 0.10, "recovery": 0.28, "damage": 9.0, "knockback": 300.0, "stun": 0.32, "aim": 0.0, "reach": Vector2(85, 85), "swing": 1.0},
+		false: {"band": "mid", "heavy": false, "windup": 0.10, "active": 0.07, "recovery": 0.18, "damage": 5.0, "knockback": 180.0, "stun": 0.22, "contact_size": Vector2(18, 18), "extension": 2.45, "swing": 1.12, "forward_speed": 45.0},
+		true: {"band": "mid", "heavy": true, "windup": 0.22, "active": 0.08, "recovery": 0.34, "damage": 10.0, "knockback": 310.0, "stun": 0.34, "contact_size": Vector2(20, 20), "extension": 4.0, "swing": 1.28, "forward_speed": 35.0},
 	},
 	"low": {
-		false: {"band": "low", "heavy": false, "windup": 0.24, "active": 0.10, "recovery": 0.26, "damage": 8.0, "knockback": 260.0, "stun": 0.34, "aim": 14.0, "reach": Vector2(95, 100), "swing": 1.1},
-		true: {"band": "low", "heavy": true, "windup": 0.38, "active": 0.12, "recovery": 0.42, "damage": 14.0, "knockback": 400.0, "stun": 0.46, "aim": 14.0, "reach": Vector2(105, 110), "swing": 1.4},
+		false: {"band": "low", "heavy": false, "windup": 0.18, "active": 0.08, "recovery": 0.28, "damage": 8.0, "knockback": 260.0, "stun": 0.34, "contact_size": Vector2(22, 26), "extension": 2.0, "swing": 1.18, "forward_speed": 35.0},
+		true: {"band": "low", "heavy": true, "windup": 0.32, "active": 0.10, "recovery": 0.46, "damage": 14.0, "knockback": 400.0, "stun": 0.46, "contact_size": Vector2(24, 30), "extension": 2.2, "swing": 1.28, "forward_speed": 25.0},
 	},
 }
 
 signal died
 
-enum State { IDLE, ATTACK, HURT, KO }
+enum State { IDLE, STANCE, ATTACK, HURT, KO }
 
 @export var player_number: int = 1
 @export var body_color: Color = Color(0.85, 0.2, 0.2)
@@ -38,6 +42,7 @@ enum State { IDLE, ATTACK, HURT, KO }
 @onready var rig: Node2D = $Rig
 @onready var face: ColorRect = $Rig/Face
 @onready var stance_marker: ColorRect = $Rig/StanceMarker
+@onready var body_shape: CollisionShape2D = $CollisionShape2D
 @onready var hitbox: Area2D = $Hitbox
 @onready var hitbox_shape: CollisionShape2D = $Hitbox/HitboxShape
 
@@ -47,33 +52,42 @@ var limb_hp: Dictionary = {}
 var state: int = State.IDLE
 var facing := 1
 var stance := 1
+var pending_stance := 1
+var stance_timer := 0.0
 var hurt_timer := 0.0
 var flash_timer := 0.0
 var attack: Dictionary = {}
 var attack_phase := ""
 var attack_time := 0.0
 var hit_landed := false
+var attack_facing := 1
 var input_locked := false
 var air_hits := 0
 var hurt_tilt := 0.0
 var stick_was_up := false
 var attack_tween: Tween
+var buffered_band := ""
+var buffered_heavy := false
+var input_buffer_timer := 0.0
 
 
 func _ready() -> void:
 	scale = Vector2(SCALE, SCALE)
+	body_shape.shape = body_shape.shape.duplicate()
+	hitbox_shape.shape = hitbox_shape.shape.duplicate()
 	_setup_limbs()
 	_snap_stance_visuals()
 	_set_hitbox(false)
 
 
 func _physics_process(delta: float) -> void:
+	_capture_attack_input()
+	_tick_input_buffer(delta)
 	if not input_locked and state == State.IDLE and Input.is_action_just_pressed(_action("stance")):
-		stance = -stance
-		_refresh_limb_colors()
-		_show_stance_change()
+		_start_stance_change()
 
-	_update_facing()
+	if state != State.ATTACK:
+		_update_facing()
 	_apply_stance_visuals(delta)
 	if not is_on_floor():
 		velocity.y += GRAVITY * delta
@@ -81,8 +95,14 @@ func _physics_process(delta: float) -> void:
 	match state:
 		State.IDLE:
 			_apply_idle()
+		State.STANCE:
+			velocity.x = 0.0
+			stance_timer -= delta
+			if stance_timer <= 0.0:
+				_finish_stance_change()
 		State.ATTACK:
-			velocity.x = facing * 60.0
+			velocity.x = attack_facing * float(attack.forward_speed)
+			_update_strike_hitbox()
 			_tick_attack(delta)
 		State.HURT:
 			velocity.x *= 0.86
@@ -95,6 +115,7 @@ func _physics_process(delta: float) -> void:
 	var tilt_target := hurt_tilt if state == State.HURT else 0.0
 	rig.rotation = lerpf(rig.rotation, tilt_target, delta * 12.0)
 	rig.position.y = 38.0 if _is_legless() else 0.0
+	_update_body_collision()
 	move_and_slide()
 	_update_flash(delta)
 
@@ -107,13 +128,10 @@ func _apply_idle() -> void:
 		velocity.y = JUMP_VELOCITY
 		return
 
-	var band := ""
-	for candidate in ["high", "mid", "low"]:
-		if Input.is_action_just_pressed(_action(candidate)):
-			band = candidate
-			break
+	var band := buffered_band
 	if band != "":
-		var heavy := _heavy_held()
+		var heavy := buffered_heavy
+		_clear_input_buffer()
 		var data: Dictionary = _attack_data(band, heavy)
 		var swing_limb := _attacking_limb(data.band, heavy)
 		if swing_limb == "":
@@ -130,6 +148,15 @@ func _attack_data(band: String, heavy: bool) -> Dictionary:
 	return ATTACKS[band][heavy].duplicate()
 
 
+func estimated_attack_reach(band: String, heavy: bool) -> float:
+	var data := _attack_data(band, heavy)
+	var limb_name := CombatRules.source_limb(band, heavy, stance)
+	var limb_length := LEG_LENGTH if limb_name.begins_with("leg_") else ARM_LENGTH
+	var pivot_x := CombatRules.pose_x(limb_name, stance, 1)
+	var endpoint_x := pivot_x + limb_length * float(data.extension) * sin(float(data.swing))
+	return (endpoint_x + float(data.contact_size.x) / 2.0) * SCALE
+
+
 func _attacking_limb(band: String, heavy: bool) -> String:
 	var limb := CombatRules.source_limb(band, heavy, stance)
 	if _limb_available(limb):
@@ -143,21 +170,36 @@ func _start_attack(data: Dictionary) -> void:
 	attack_phase = "windup"
 	attack_time = 0.0
 	hit_landed = false
-	var reach: Vector2 = attack.reach
-	hitbox_shape.shape.size = reach
-	hitbox.position.x = facing * (reach.x / 2.0 + 30.0)
-	hitbox.position.y = attack.aim
+	attack_facing = facing
+	hitbox_shape.shape.size = attack.contact_size
 	_set_hitbox(false)
 	_anim_attack(attack)
+	_update_strike_hitbox()
 
 
 func _anim_attack(data: Dictionary) -> void:
 	var limb_node: Node2D = _get_limb_node(data.name)
-	if attack_tween:
+	if attack_tween and attack_tween.is_valid():
 		attack_tween.kill()
+	limb_node.rotation = 0.0
+	limb_node.scale = Vector2.ONE
 	attack_tween = create_tween()
-	attack_tween.tween_property(limb_node, "rotation", -facing * data.swing, data.windup + data.active)
+	attack_tween.set_trans(Tween.TRANS_QUAD)
+	attack_tween.set_ease(Tween.EASE_OUT)
+	attack_tween.tween_property(limb_node, "rotation", -attack_facing * data.swing, data.windup + data.active)
+	attack_tween.parallel().tween_property(limb_node, "scale", Vector2(1.0, data.extension), data.windup + data.active)
+	attack_tween.set_ease(Tween.EASE_IN_OUT)
 	attack_tween.tween_property(limb_node, "rotation", 0.0, data.recovery)
+	attack_tween.parallel().tween_property(limb_node, "scale", Vector2.ONE, data.recovery)
+
+
+func _update_strike_hitbox() -> void:
+	if attack.is_empty() or not attack.has("name"):
+		return
+	var source_limb := _get_limb_node(attack.name)
+	var limb_length := LEG_LENGTH if String(attack.name).begins_with("leg_") else ARM_LENGTH
+	hitbox.global_position = source_limb.to_global(Vector2(0.0, limb_length))
+	hitbox.global_rotation = source_limb.global_rotation
 
 
 func _tick_attack(delta: float) -> void:
@@ -177,26 +219,25 @@ func _tick_attack(delta: float) -> void:
 				_set_hitbox(false)
 		"recovery":
 			if attack_time >= attack.recovery:
-				state = State.IDLE
+				_finish_attack()
 
 
 func _check_hits() -> void:
-	for area in hitbox.get_overlapping_areas():
-		var victim: Node = area
-		while victim != null and not (victim is Player):
-			victim = victim.get_parent()
-		if victim == null or victim == self:
-			continue
-		hit_landed = true
-		var target: String = _pick_target(victim, attack.band)
-		if target == "":
-			return
-		victim.take_part_hit(target, attack.band, attack.damage, global_position.x, attack.knockback, attack.stun)
+	var victim := _find_opponent() as Player
+	if victim == null:
 		return
+	var target: String = _pick_target(victim, attack.band)
+	if target == "":
+		return
+	var target_hurtbox := victim._get_limb_hurtbox(target)
+	if not hitbox.overlaps_area(target_hurtbox):
+		return
+	hit_landed = true
+	victim.take_part_hit(target, attack.band, attack.damage, global_position.x, attack.knockback, attack.stun)
 
 
 func _pick_target(victim, band: String) -> String:
-	return CombatRules.pick_target(band, victim.stance, victim.limb_hp)
+	return CombatRules.pick_target(band, victim.current_target_stance(), victim.limb_hp)
 
 
 func take_part_hit(limb_name: String, _band: String, dmg: float, source_x: float, kb: float, stun: float) -> void:
@@ -204,6 +245,10 @@ func take_part_hit(limb_name: String, _band: String, dmg: float, source_x: float
 		_blocked_hit(dmg, source_x, kb, stun)
 		return
 
+	var counter_hit := state == State.ATTACK or state == State.STANCE
+	if counter_hit:
+		dmg *= 1.25
+		stun *= 1.2
 	_interrupt_attack()
 	var limb: Dictionary = limb_hp[limb_name]
 	if limb.gone:
@@ -224,6 +269,7 @@ func take_part_hit(limb_name: String, _band: String, dmg: float, source_x: float
 		limb.gone = true
 		if limb_name != "torso":
 			_get_limb_body(limb_name).visible = false
+		_set_limb_hurtbox_enabled(limb_name, false)
 		Effects.add_shake(8.0)
 		_float_text(hit_position, "%s LOST!" % limb_name.to_upper(), Color(1, 0.4, 0.2))
 
@@ -236,6 +282,8 @@ func take_part_hit(limb_name: String, _band: String, dmg: float, source_x: float
 	_flash_limb(limb_name)
 	_spawn_impact(hit_position)
 	_float_text(hit_position, "-%d %s" % [roundi(dmg), limb_name], Color(1, 0.9, 0.3))
+	if counter_hit:
+		_float_text(hit_position + Vector2(0, -35.0), "COUNTER", Color(1.0, 0.25, 0.15))
 	Effects.hitstop(0.05 if dmg <= 6.0 else 0.09)
 	Effects.add_shake(3.0 if dmg <= 6.0 else 7.0)
 
@@ -272,11 +320,20 @@ func _blocked_hit(dmg: float, source_x: float, kb: float, _stun: float) -> void:
 
 
 func _interrupt_attack() -> void:
-	if attack_tween:
+	if attack_tween and attack_tween.is_valid():
 		attack_tween.kill()
-		attack_tween = null
+	attack_tween = null
+	_set_hitbox(false)
 	for name in LIMBS:
 		_get_limb_node(name).rotation = 0.0
+		_get_limb_node(name).scale = Vector2.ONE
+
+
+func _finish_attack() -> void:
+	_interrupt_attack()
+	attack.clear()
+	attack_phase = ""
+	state = State.IDLE
 
 
 func _update_flash(delta: float) -> void:
@@ -288,6 +345,11 @@ func _update_flash(delta: float) -> void:
 
 func _set_hitbox(active: bool) -> void:
 	hitbox_shape.disabled = not active
+
+
+func _set_limb_hurtbox_enabled(limb_name: String, enabled: bool) -> void:
+	var shape := _get_limb_hurtbox(limb_name).get_node("Shape") as CollisionShape2D
+	shape.disabled = not enabled
 
 
 func _setup_limbs() -> void:
@@ -334,12 +396,22 @@ func front_side() -> String:
 	return CombatRules.close_side(stance)
 
 
+func current_target_stance() -> int:
+	var toward := float(facing)
+	var right_progress := _get_limb_node("leg_r").global_position.x * toward
+	var left_progress := _get_limb_node("leg_l").global_position.x * toward
+	return 1 if right_progress >= left_progress else -1
+
+
 func _apply_stance_visuals(delta: float) -> void:
+	var pose_stance := pending_stance if state == State.STANCE else stance
 	for limb_name in ["arm_l", "arm_r", "leg_l", "leg_r"]:
 		var limb_node := _get_limb_node(limb_name)
-		var target_x := CombatRules.pose_x(limb_name, stance, facing)
+		var target_x := CombatRules.pose_x(limb_name, pose_stance, facing)
 		limb_node.position.x = move_toward(limb_node.position.x, target_x, STANCE_POSE_SPEED * delta)
-		limb_node.z_index = 2 if CombatRules.is_close_limb(limb_name, stance) else 0
+	var visible_stance := current_target_stance()
+	for limb_name in ["arm_l", "arm_r", "leg_l", "leg_r"]:
+		_get_limb_node(limb_name).z_index = 2 if CombatRules.is_close_limb(limb_name, visible_stance) else 0
 	stance_marker.position.x = move_toward(
 		stance_marker.position.x,
 		float(facing) * CombatRules.LEG_OFFSET_X - stance_marker.size.x / 2.0,
@@ -361,6 +433,20 @@ func _show_stance_change() -> void:
 	stance_marker.modulate = Color(2.0, 2.0, 1.0, 1.0)
 	var tw := create_tween()
 	tw.tween_property(stance_marker, "modulate", Color.WHITE, 0.18)
+
+
+func _start_stance_change() -> void:
+	pending_stance = -stance
+	stance_timer = STANCE_TRANSITION_DURATION
+	state = State.STANCE
+	_clear_input_buffer()
+
+
+func _finish_stance_change() -> void:
+	stance = pending_stance
+	state = State.IDLE
+	_refresh_limb_colors()
+	_show_stance_change()
 
 
 func _rear_side() -> String:
@@ -402,16 +488,20 @@ func reset(start_pos: Vector2) -> void:
 	hurt_tilt = 0.0
 	stick_was_up = false
 	stance = 1
+	pending_stance = 1
+	stance_timer = 0.0
 	rig.rotation = 0.0
 	rig.position = Vector2.ZERO
 	_set_hitbox(false)
 	rig.self_modulate = Color.WHITE
 	rig.modulate = Color.WHITE
 	_interrupt_attack()
+	_clear_input_buffer()
 	for name in LIMBS:
 		limb_hp[name].hp = LIMB_MAX[name]
 		limb_hp[name].gone = false
 		_get_limb_body(name).visible = true
+		_set_limb_hurtbox_enabled(name, true)
 	_refresh_limb_colors()
 	_snap_stance_visuals()
 
@@ -478,9 +568,55 @@ func _heavy_held() -> bool:
 
 
 func _is_blocking() -> bool:
+	if state != State.IDLE or input_locked:
+		return false
 	if Input.is_action_pressed(_action("block")):
 		return true
 	return _move_dir() * facing < -0.3
+
+
+func _capture_attack_input() -> void:
+	if input_locked or state == State.KO:
+		return
+	for candidate in ["high", "mid", "low"]:
+		if Input.is_action_just_pressed(_action(candidate)):
+			buffered_band = candidate
+			buffered_heavy = _heavy_held()
+			input_buffer_timer = INPUT_BUFFER_DURATION
+			return
+
+
+func _tick_input_buffer(delta: float) -> void:
+	if buffered_band == "":
+		return
+	input_buffer_timer -= delta
+	if input_buffer_timer <= 0.0:
+		_clear_input_buffer()
+
+
+func _clear_input_buffer() -> void:
+	buffered_band = ""
+	buffered_heavy = false
+	input_buffer_timer = 0.0
+
+
+func _update_body_collision() -> void:
+	var rect := body_shape.shape as RectangleShape2D
+	if _is_legless():
+		rect.size = Vector2(46.0, 40.0)
+		body_shape.position = Vector2(0.0, 20.0)
+	else:
+		rect.size = Vector2(43.0, 80.0)
+		body_shape.position = Vector2.ZERO
+
+
+func set_hitstop_paused(paused: bool) -> void:
+	if attack_tween == null or not attack_tween.is_valid():
+		return
+	if paused:
+		attack_tween.pause()
+	else:
+		attack_tween.play()
 
 
 func _action(name: String) -> StringName:

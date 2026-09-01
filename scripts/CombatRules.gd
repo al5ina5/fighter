@@ -29,12 +29,17 @@ static func rear_side(stance: int) -> String:
 
 
 static func source_limb(band: String, heavy: bool, stance: int) -> String:
-	var side := rear_side(stance) if heavy else close_side(stance)
 	match band:
-		HIGH, MID:
-			return "arm_" + side
+		HIGH:
+			# A normal high is a lead-hand head punch. The committed heavy high
+			# is a rear-leg head kick.
+			return ("leg_" + rear_side(stance)) if heavy else ("arm_" + close_side(stance))
+		MID:
+			var mid_side := rear_side(stance) if heavy else close_side(stance)
+			return "arm_" + mid_side
 		LOW:
-			return "leg_" + side
+			var low_side := rear_side(stance) if heavy else close_side(stance)
+			return "leg_" + low_side
 	return ""
 
 
