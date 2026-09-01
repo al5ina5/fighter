@@ -12,14 +12,13 @@ const LIMB_MAX := {
 	"leg_l": 40.0, "leg_r": 40.0,
 }
 const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
-const LEG_BASE := {"leg_l": -7.0, "leg_r": 7.0}
 
-const HIGH_L := {"band": "high", "windup": 0.12, "active": 0.08, "recovery": 0.20, "damage": 6.0, "knockback": 200.0, "stun": 0.24, "aim": -14.0, "reach": Vector2(80, 80), "swing": 0.9}
-const HIGH_H := {"band": "high", "windup": 0.24, "active": 0.10, "recovery": 0.34, "damage": 11.0, "knockback": 320.0, "stun": 0.36, "aim": -14.0, "reach": Vector2(90, 90), "swing": 1.1}
-const MID_L := {"band": "mid", "windup": 0.10, "active": 0.08, "recovery": 0.16, "damage": 5.0, "knockback": 180.0, "stun": 0.22, "aim": 0.0, "reach": Vector2(75, 75), "swing": 0.8}
-const MID_H := {"band": "mid", "windup": 0.20, "active": 0.10, "recovery": 0.28, "damage": 9.0, "knockback": 300.0, "stun": 0.32, "aim": 0.0, "reach": Vector2(85, 85), "swing": 1.0}
-const LOW_L := {"band": "low", "windup": 0.24, "active": 0.10, "recovery": 0.26, "damage": 8.0, "knockback": 260.0, "stun": 0.34, "aim": 14.0, "reach": Vector2(95, 100), "swing": 1.1}
-const LOW_H := {"band": "low", "windup": 0.38, "active": 0.12, "recovery": 0.42, "damage": 14.0, "knockback": 400.0, "stun": 0.46, "aim": 14.0, "reach": Vector2(105, 110), "swing": 1.4}
+const HIGH_L := {"band": "high", "heavy": false, "windup": 0.12, "active": 0.08, "recovery": 0.20, "damage": 6.0, "knockback": 200.0, "stun": 0.24, "aim": -14.0, "reach": Vector2(80, 80), "swing": 0.9}
+const HIGH_H := {"band": "high", "heavy": true, "windup": 0.24, "active": 0.10, "recovery": 0.34, "damage": 11.0, "knockback": 320.0, "stun": 0.36, "aim": -14.0, "reach": Vector2(90, 90), "swing": 1.1}
+const MID_L := {"band": "mid", "heavy": false, "windup": 0.10, "active": 0.08, "recovery": 0.16, "damage": 5.0, "knockback": 180.0, "stun": 0.22, "aim": 0.0, "reach": Vector2(75, 75), "swing": 0.8}
+const MID_H := {"band": "mid", "heavy": true, "windup": 0.20, "active": 0.10, "recovery": 0.28, "damage": 9.0, "knockback": 300.0, "stun": 0.32, "aim": 0.0, "reach": Vector2(85, 85), "swing": 1.0}
+const LOW_L := {"band": "low", "heavy": false, "windup": 0.24, "active": 0.10, "recovery": 0.26, "damage": 8.0, "knockback": 260.0, "stun": 0.34, "aim": 14.0, "reach": Vector2(95, 100), "swing": 1.1}
+const LOW_H := {"band": "low", "heavy": true, "windup": 0.38, "active": 0.12, "recovery": 0.42, "damage": 14.0, "knockback": 400.0, "stun": 0.46, "aim": 14.0, "reach": Vector2(105, 110), "swing": 1.4}
 
 signal died
 
@@ -64,7 +63,6 @@ func _physics_process(delta: float) -> void:
 		_refresh_limb_colors()
 
 	_update_facing()
-	_apply_stance_pose()
 
 	if not is_on_floor():
 		velocity.y += GRAVITY * delta
@@ -109,7 +107,7 @@ func _apply_idle() -> void:
 		if _is_legless():
 			data["band"] = "low"
 			data["aim"] = 26.0
-		var swing := _swing_limb(data.band)
+		var swing := _swing_limb(data.band, heavy)
 		if swing != "":
 			data["name"] = swing
 			_start_attack(data)
@@ -132,21 +130,21 @@ func _attack_data(band: String, heavy: bool) -> Dictionary:
 	return MID_L.duplicate()
 
 
-func _swing_limb(band: String) -> String:
+func _swing_limb(band: String, heavy: bool) -> String:
+	var near := "r" if facing == 1 else "l"
+	var far := "l" if near == "r" else "r"
+	var order: Array = [near, far] if not heavy else [far, near]
 	if band == "high" or band == "mid":
-		if _limb_available(_arm_lead()):
-			return _arm_lead()
-		if _limb_available(_arm_other()):
-			return _arm_other()
+		for side in order:
+			if _limb_available("arm_" + side):
+				return "arm_" + side
 		return ""
-	if _limb_available(_leg_lead()):
-		return _leg_lead()
-	if _limb_available(_leg_other()):
-		return _leg_other()
-	if _limb_available(_arm_lead()):
-		return _arm_lead()
-	if _limb_available(_arm_other()):
-		return _arm_other()
+	for side in order:
+		if _limb_available("leg_" + side):
+			return "leg_" + side
+	for side in order:
+		if _limb_available("arm_" + side):
+			return "arm_" + side
 	return ""
 
 
@@ -201,21 +199,21 @@ func _check_hits() -> void:
 		if victim == null or victim == self:
 			continue
 		hit_landed = true
-		var target: String = _pick_target(victim, attack.band)
+		var target: String = _pick_target(victim, attack.band, attack.heavy)
 		victim.take_part_hit(target, attack.damage, global_position.x, attack.knockback, attack.stun)
 		return
 
 
-func _pick_target(victim, band: String) -> String:
-	for name in _target_priority(victim, band):
+func _pick_target(victim, band: String, heavy: bool) -> String:
+	for name in _target_priority(victim, band, heavy):
 		if not victim.limb_hp[name].gone:
 			return name
 	return "torso"
 
 
-func _target_priority(victim, band: String) -> Array:
-	var lead: String = victim.lead_side()
-	var other := "l" if lead == "r" else "r"
+func _target_priority(victim, band: String, heavy: bool) -> Array:
+	var closer := "l" if global_position.x < victim.global_position.x else "r"
+	var farther := "r" if closer == "l" else "l"
 	if victim._is_legless():
 		match band:
 			"high":
@@ -223,14 +221,20 @@ func _target_priority(victim, band: String) -> Array:
 			"mid":
 				return ["head", "torso"]
 			"low":
-				return ["torso", "arm_" + lead, "arm_" + other]
+				if heavy:
+					return ["arm_" + farther, "arm_" + closer, "torso"]
+				return ["arm_" + closer, "arm_" + farther, "torso"]
 	match band:
 		"high":
 			return ["head", "torso"]
 		"mid":
-			return ["arm_" + lead, "arm_" + other, "torso"]
+			if heavy:
+				return ["arm_" + farther, "arm_" + closer, "torso"]
+			return ["arm_" + closer, "arm_" + farther, "torso"]
 		"low":
-			return ["leg_" + lead, "leg_" + other, "torso"]
+			if heavy:
+				return ["leg_" + farther, "leg_" + closer, "torso"]
+			return ["leg_" + closer, "leg_" + farther, "torso"]
 	return ["torso"]
 
 
@@ -341,21 +345,12 @@ func _refresh_limb_colors() -> void:
 func _limb_color(name: String) -> Color:
 	if name == "head":
 		return body_color.lightened(0.15)
-	return body_color
-
-
-func _apply_stance_pose() -> void:
-	if state == State.KO:
-		return
-	var f := float(facing)
+	if name == "torso":
+		return body_color
 	var lead := "r" if stance == 1 else "l"
-	for leg in ["leg_l", "leg_r"]:
-		var node: Node2D = _get_limb_node(leg)
-		var base: float = LEG_BASE[leg]
-		if leg.ends_with("_" + lead):
-			node.position.x = base + 8.0 * f
-		else:
-			node.position.x = base - 4.0 * f
+	if name.ends_with("_" + lead):
+		return body_color.darkened(0.12)
+	return body_color.lightened(0.10)
 
 
 func _get_limb_body(name: String) -> ColorRect:
@@ -380,26 +375,6 @@ func _has_arm() -> bool:
 
 func _has_leg() -> bool:
 	return not (limb_hp["leg_l"].gone and limb_hp["leg_r"].gone)
-
-
-func lead_side() -> String:
-	return "r" if stance == 1 else "l"
-
-
-func _arm_lead() -> String:
-	return "arm_" + lead_side()
-
-
-func _arm_other() -> String:
-	return "arm_" + ("l" if lead_side() == "r" else "r")
-
-
-func _leg_lead() -> String:
-	return "leg_" + lead_side()
-
-
-func _leg_other() -> String:
-	return "leg_" + ("l" if lead_side() == "r" else "r")
 
 
 func _torso_mult() -> float:
