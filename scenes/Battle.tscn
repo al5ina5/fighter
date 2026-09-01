@@ -103,13 +103,35 @@ value = 100.0
 show_percentage = false
 fill_mode = 1
 
+[node name="CountLabel" type="Label" parent="HUD"]
+visible = false
+offset_left = 0.0
+offset_top = 160.0
+offset_right = 1280.0
+offset_bottom = 280.0
+theme_override_font_sizes/font_size = 110
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+text = "1"
+horizontal_alignment = 1
+
 [node name="KOLabel" type="Label" parent="HUD"]
 visible = false
-offset_left = 440.0
-offset_top = 300.0
-offset_right = 840.0
-offset_bottom = 400.0
-theme_override_font_sizes/font_size = 64
-theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+offset_left = 0.0
+offset_top = 280.0
+offset_right = 1280.0
+offset_bottom = 350.0
+theme_override_font_sizes/font_size = 60
+theme_override_colors/font_color = Color(1, 0.3, 0.2, 1)
 text = "KO"
+horizontal_alignment = 1
+
+[node name="RematchLabel" type="Label" parent="HUD"]
+visible = false
+offset_left = 0.0
+offset_top = 360.0
+offset_right = 1280.0
+offset_bottom = 400.0
+theme_override_font_sizes/font_size = 32
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "Press R to rematch"
 horizontal_alignment = 1

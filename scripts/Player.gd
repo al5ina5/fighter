@@ -38,6 +38,7 @@ var attack: Dictionary = {}
 var attack_phase := ""
 var attack_time := 0.0
 var hit_landed := false
+var input_locked := false
 
 
 func _ready() -> void:
@@ -75,6 +76,9 @@ func _physics_process(delta: float) -> void:
 
 
 func _apply_idle() -> void:
+	if input_locked:
+		velocity.x = 0.0
+		return
 	if _block_held() and is_on_floor():
 		state = State.BLOCK
 		return
@@ -181,6 +185,20 @@ func _update_flash(delta: float) -> void:
 func _set_hitbox(active: bool) -> void:
 	hitbox_shape.disabled = not active
 	hitbox_debug.visible = active
+
+
+func reset(start_pos: Vector2) -> void:
+	health = 100.0
+	guard = GUARD_MAX
+	state = State.IDLE
+	velocity = Vector2.ZERO
+	position = start_pos
+	hurt_timer = 0.0
+	flash_timer = 0.0
+	input_locked = true
+	_set_hitbox(false)
+	visual.self_modulate = Color.WHITE
+	visual.modulate = Color.WHITE
 
 
 func _move_input() -> float:
