@@ -13,23 +13,12 @@ const LIMB_MAX := {
 }
 const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
 
-const ARM_L := {
-	"name": "arm_l", "side": "l", "base_class": "arm", "windup": 0.10, "active": 0.08, "recovery": 0.16,
-	"damage": 5.0, "knockback": 180.0, "stun": 0.22, "reach": Vector2(70, 70), "aim": 0.0, "swing": 0.8,
-}
-const ARM_R := {
-	"name": "arm_r", "side": "r", "base_class": "arm", "windup": 0.20, "active": 0.10, "recovery": 0.28,
-	"damage": 9.0, "knockback": 300.0, "stun": 0.32, "reach": Vector2(75, 75), "aim": 0.0, "swing": 1.0,
-}
-const LEG_L := {
-	"name": "leg_l", "side": "l", "base_class": "leg", "windup": 0.24, "active": 0.10, "recovery": 0.26,
-	"damage": 8.0, "knockback": 260.0, "stun": 0.34, "reach": Vector2(90, 95), "aim": 12.0, "swing": 1.0,
-}
-const LEG_R := {
-	"name": "leg_r", "side": "r", "base_class": "leg", "windup": 0.38, "active": 0.12, "recovery": 0.42,
-	"damage": 14.0, "knockback": 400.0, "stun": 0.46, "reach": Vector2(100, 105), "aim": 12.0, "swing": 1.3,
-}
-const ATTACKS := {"arm_l": ARM_L, "arm_r": ARM_R, "leg_l": LEG_L, "leg_r": LEG_R}
+const HIGH_L := {"band": "high", "windup": 0.12, "active": 0.08, "recovery": 0.20, "damage": 6.0, "knockback": 200.0, "stun": 0.24, "aim": -14.0, "reach": Vector2(80, 80), "swing": 0.9}
+const HIGH_H := {"band": "high", "windup": 0.24, "active": 0.10, "recovery": 0.34, "damage": 11.0, "knockback": 320.0, "stun": 0.36, "aim": -14.0, "reach": Vector2(90, 90), "swing": 1.1}
+const MID_L := {"band": "mid", "windup": 0.10, "active": 0.08, "recovery": 0.16, "damage": 5.0, "knockback": 180.0, "stun": 0.22, "aim": 0.0, "reach": Vector2(75, 75), "swing": 0.8}
+const MID_H := {"band": "mid", "windup": 0.20, "active": 0.10, "recovery": 0.28, "damage": 9.0, "knockback": 300.0, "stun": 0.32, "aim": 0.0, "reach": Vector2(85, 85), "swing": 1.0}
+const LOW_L := {"band": "low", "windup": 0.24, "active": 0.10, "recovery": 0.26, "damage": 8.0, "knockback": 260.0, "stun": 0.34, "aim": 14.0, "reach": Vector2(95, 100), "swing": 1.1}
+const LOW_H := {"band": "low", "windup": 0.38, "active": 0.12, "recovery": 0.42, "damage": 14.0, "knockback": 400.0, "stun": 0.46, "aim": 14.0, "reach": Vector2(105, 110), "swing": 1.4}
 
 signal died
 
@@ -82,7 +71,7 @@ func _physics_process(delta: float) -> void:
 		State.IDLE:
 			_apply_idle()
 		State.ATTACK:
-			velocity.x = facing * 70.0
+			velocity.x = facing * 60.0
 			_tick_attack(delta)
 		State.HURT:
 			velocity.x *= 0.86
@@ -106,18 +95,57 @@ func _apply_idle() -> void:
 	if _jump_pressed() and is_on_floor() and not _is_legless():
 		velocity.y = JUMP_VELOCITY
 		return
-	for name in ["arm_l", "arm_r", "leg_l", "leg_r"]:
-		if Input.is_action_just_pressed(_action(name)):
-			if _limb_available(name):
-				var data := _attack_stats(name).duplicate()
-				data["name"] = name
-				data["side"] = _effective_side(name)
-				_start_attack(data)
-			else:
-				var kind := "ARM" if name.begins_with("arm") else "LEG"
-				_float_text(global_position + Vector2(0, -70.0), "NO %s" % kind, Color(1, 0.3, 0.3))
-			return
+
+	var band := ""
+	for suffix in ["high", "mid", "low"]:
+		if Input.is_action_just_pressed(_action(suffix)):
+			band = suffix
+			break
+	if band != "":
+		var heavy := Input.is_action_pressed(_action("heavy"))
+		var data := _attack_data(band, heavy)
+		if _is_legless():
+			data["band"] = "low"
+			data["aim"] = 26.0
+		var swing := _swing_limb(data.band)
+		if swing != "":
+			data["name"] = swing
+			_start_attack(data)
+		else:
+			var kind := "ARM" if data.band != "low" else "LEG"
+			_float_text(global_position + Vector2(0, -70.0), "NO %s" % kind, Color(1, 0.3, 0.3))
+		return
+
 	velocity.x = _move_dir() * _move_speed()
+
+
+func _attack_data(band: String, heavy: bool) -> Dictionary:
+	match band:
+		"high":
+			return HIGH_H if heavy else HIGH_L
+		"mid":
+			return MID_H if heavy else MID_L
+		"low":
+			return LOW_H if heavy else LOW_L
+	return MID_L
+
+
+func _swing_limb(band: String) -> String:
+	if band == "high" or band == "mid":
+		if _limb_available(_arm_lead()):
+			return _arm_lead()
+		if _limb_available(_arm_other()):
+			return _arm_other()
+		return ""
+	if _limb_available(_leg_lead()):
+		return _leg_lead()
+	if _limb_available(_leg_other()):
+		return _leg_other()
+	if _limb_available(_arm_lead()):
+		return _arm_lead()
+	if _limb_available(_arm_other()):
+		return _arm_other()
+	return ""
 
 
 func _start_attack(data: Dictionary) -> void:
@@ -126,28 +154,10 @@ func _start_attack(data: Dictionary) -> void:
 	attack_phase = "windup"
 	attack_time = 0.0
 	hit_landed = false
-
-	var aim: float = data.aim
-	if _is_legless():
-		aim = 24.0
-	elif _high_held():
-		aim = -16.0
-	elif _low_held():
-		aim = 22.0
-	attack["aim"] = aim
-	if _is_legless():
-		attack["target_class"] = "leg"
-	elif _high_held():
-		attack["target_class"] = "arm"
-	elif _low_held():
-		attack["target_class"] = "leg"
-	else:
-		attack["target_class"] = data.base_class
-
 	var reach: Vector2 = data.reach
 	hitbox_shape.shape.size = reach
 	hitbox.position.x = facing * (reach.x / 2.0 + 30.0)
-	hitbox.position.y = aim
+	hitbox.position.y = data.aim
 	_set_hitbox(false)
 	_anim_attack(data)
 
@@ -189,10 +199,26 @@ func _check_hits() -> void:
 		if victim == null or victim == self:
 			continue
 		hit_landed = true
-		var base_target: String = attack.target_class + "_" + attack.side
-		var target: String = _fallback_target(victim, base_target)
+		var target: String = _pick_target(victim, attack.band)
 		victim.take_part_hit(target, attack.damage, global_position.x, attack.knockback, attack.stun)
 		return
+
+
+func _pick_target(victim, band: String) -> String:
+	var lead: String = victim.lead_side()
+	var other := "l" if lead == "r" else "r"
+	var priority: Array
+	match band:
+		"high":
+			priority = ["arm_" + lead, "arm_" + other, "head", "torso"]
+		"mid":
+			priority = ["torso", "arm_" + lead, "arm_" + other, "torso"]
+		"low":
+			priority = ["leg_" + lead, "leg_" + other, "torso"]
+	for name in priority:
+		if not victim.limb_hp[name].gone:
+			return name
+	return "torso"
 
 
 func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, stun: float) -> void:
@@ -286,43 +312,6 @@ func _set_hitbox(active: bool) -> void:
 	hitbox_shape.disabled = not active
 
 
-func _flash_limb(limb_name: String) -> void:
-	var limb_body: ColorRect = _get_limb_body(limb_name)
-	limb_body.self_modulate = Color(3.0, 3.0, 3.0)
-	var tw := create_tween()
-	tw.tween_interval(0.06)
-	tw.tween_property(limb_body, "self_modulate", Color.WHITE, 0.08)
-
-
-func _spawn_impact(pos: Vector2) -> void:
-	var burst := ColorRect.new()
-	burst.color = Color(1, 0.95, 0.5, 0.9)
-	burst.size = Vector2(22, 22)
-	burst.position = pos - Vector2(11, 11)
-	burst.z_index = 5
-	add_child(burst)
-	var tw := create_tween()
-	tw.tween_property(burst, "scale", Vector2(1.7, 1.7), 0.12)
-	tw.parallel().tween_property(burst, "modulate:a", 0.0, 0.12)
-	tw.tween_callback(burst.queue_free)
-
-
-func _float_text(pos: Vector2, text: String, color: Color) -> void:
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", 34)
-	label.add_theme_color_override("font_color", color)
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.size = Vector2(240, 60)
-	label.position = pos - Vector2(120, 30)
-	label.z_index = 6
-	get_parent().add_child(label)
-	var tw := create_tween()
-	tw.tween_property(label, "position", label.position + Vector2(0, -70), 0.6)
-	tw.parallel().tween_property(label, "modulate:a", 0.0, 0.6)
-	tw.tween_callback(label.queue_free)
-
-
 func _setup_limbs() -> void:
 	for name in LIMBS:
 		var hurtbox: Area2D = _get_limb_hurtbox(name)
@@ -341,8 +330,8 @@ func _limb_color(name: String) -> Color:
 		return body_color.lightened(0.15)
 	if name == "torso":
 		return body_color
-	var heavy_side := "r" if stance == 1 else "l"
-	if name.ends_with("_" + heavy_side):
+	var lead := "r" if stance == 1 else "l"
+	if name.ends_with("_" + lead):
 		return body_color.darkened(0.2)
 	return body_color.lightened(0.05)
 
@@ -363,41 +352,32 @@ func _limb_available(name: String) -> bool:
 	return not limb_hp[name].gone
 
 
-func _fallback_target(victim, desired: String) -> String:
-	if not victim.limb_hp[desired].gone:
-		return desired
-	if desired.begins_with("arm"):
-		return "torso"
-	var other := "leg_r" if desired == "leg_l" else "leg_l"
-	if not victim.limb_hp[other].gone:
-		return other
-	return "torso"
+func _has_arm() -> bool:
+	return not (limb_hp["arm_l"].gone and limb_hp["arm_r"].gone)
 
 
-func _is_legless() -> bool:
-	return limb_hp["leg_l"].gone and limb_hp["leg_r"].gone
+func _has_leg() -> bool:
+	return not (limb_hp["leg_l"].gone and limb_hp["leg_r"].gone)
 
 
-func _high_held() -> bool:
-	return Input.is_action_pressed(_action("high"))
+func lead_side() -> String:
+	return "r" if stance == 1 else "l"
 
 
-func _low_held() -> bool:
-	return Input.is_action_pressed(_action("low"))
+func _arm_lead() -> String:
+	return "arm_" + lead_side()
 
 
-func _attack_stats(name: String) -> Dictionary:
-	if stance == 1:
-		return ATTACKS[name]
-	var swap := {"arm_l": "arm_r", "arm_r": "arm_l", "leg_l": "leg_r", "leg_r": "leg_l"}
-	return ATTACKS[swap[name]]
+func _arm_other() -> String:
+	return "arm_" + ("l" if lead_side() == "r" else "r")
 
 
-func _effective_side(name: String) -> String:
-	var side: String = ATTACKS[name].side
-	if stance == -1:
-		return "r" if side == "l" else "l"
-	return side
+func _leg_lead() -> String:
+	return "leg_" + lead_side()
+
+
+func _leg_other() -> String:
+	return "leg_" + ("l" if lead_side() == "r" else "r")
 
 
 func _torso_mult() -> float:
@@ -407,6 +387,10 @@ func _torso_mult() -> float:
 	if limb_hp["arm_r"].gone:
 		missing += 1
 	return maxf(0.25, missing * 0.5)
+
+
+func _is_legless() -> bool:
+	return limb_hp["leg_l"].gone and limb_hp["leg_r"].gone
 
 
 func _move_speed() -> float:
@@ -449,6 +433,44 @@ func reset(start_pos: Vector2) -> void:
 		limb_hp[name].hp = LIMB_MAX[name]
 		limb_hp[name].gone = false
 		_get_limb_body(name).visible = true
+	_refresh_limb_colors()
+
+
+func _flash_limb(limb_name: String) -> void:
+	var limb_body: ColorRect = _get_limb_body(limb_name)
+	limb_body.self_modulate = Color(3.0, 3.0, 3.0)
+	var tw := create_tween()
+	tw.tween_interval(0.06)
+	tw.tween_property(limb_body, "self_modulate", Color.WHITE, 0.08)
+
+
+func _spawn_impact(pos: Vector2) -> void:
+	var burst := ColorRect.new()
+	burst.color = Color(1, 0.95, 0.5, 0.9)
+	burst.size = Vector2(22, 22)
+	burst.position = pos - Vector2(11, 11)
+	burst.z_index = 5
+	add_child(burst)
+	var tw := create_tween()
+	tw.tween_property(burst, "scale", Vector2(1.7, 1.7), 0.12)
+	tw.parallel().tween_property(burst, "modulate:a", 0.0, 0.12)
+	tw.tween_callback(burst.queue_free)
+
+
+func _float_text(pos: Vector2, text: String, color: Color) -> void:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 34)
+	label.add_theme_color_override("font_color", color)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.size = Vector2(240, 60)
+	label.position = pos - Vector2(120, 30)
+	label.z_index = 6
+	get_parent().add_child(label)
+	var tw := create_tween()
+	tw.tween_property(label, "position", label.position + Vector2(0, -70), 0.6)
+	tw.parallel().tween_property(label, "modulate:a", 0.0, 0.6)
+	tw.tween_callback(label.queue_free)
 
 
 func _move_dir() -> float:
