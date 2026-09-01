@@ -59,6 +59,7 @@ var air_hits := 0
 var hurt_tilt := 0.0
 var stick_was_up := false
 var attack_tween: Tween
+var stance := 1
 
 
 func _ready() -> void:
@@ -68,6 +69,10 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if Input.is_action_just_pressed(_action("stance")):
+		stance = -stance
+		_refresh_limb_colors()
+
 	_update_facing()
 
 	if not is_on_floor():
@@ -104,7 +109,10 @@ func _apply_idle() -> void:
 	for name in ["arm_l", "arm_r", "leg_l", "leg_r"]:
 		if Input.is_action_just_pressed(_action(name)):
 			if _limb_available(name):
-				_start_attack(ATTACKS[name])
+				var data := _attack_stats(name).duplicate()
+				data["name"] = name
+				data["side"] = _effective_side(name)
+				_start_attack(data)
 			else:
 				var kind := "ARM" if name.begins_with("arm") else "LEG"
 				_float_text(global_position + Vector2(0, -70.0), "NO %s" % kind, Color(1, 0.3, 0.3))
@@ -203,6 +211,9 @@ func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, st
 		print("juggled x", air_hits)
 	else:
 		air_hits = 0.0
+
+	if limb_name == "torso":
+		dmg *= _torso_mult()
 
 	limb.hp -= dmg
 	if limb_name == "torso" or limb_name == "head":
@@ -314,24 +325,26 @@ func _float_text(pos: Vector2, text: String, color: Color) -> void:
 
 func _setup_limbs() -> void:
 	for name in LIMBS:
-		var body: ColorRect = _get_limb_body(name)
-		body.color = _limb_color(name)
 		var hurtbox: Area2D = _get_limb_hurtbox(name)
 		hurtbox.set_meta("limb", name)
 		limb_hp[name] = {"hp": LIMB_MAX[name], "gone": false}
+	_refresh_limb_colors()
+
+
+func _refresh_limb_colors() -> void:
+	for name in LIMBS:
+		_get_limb_body(name).color = _limb_color(name)
 
 
 func _limb_color(name: String) -> Color:
-	match name:
-		"head":
-			return body_color.lightened(0.15)
-		"torso":
-			return body_color
-		"arm_l", "leg_l":
-			return body_color.lightened(0.05)
-		"arm_r", "leg_r":
-			return body_color.darkened(0.2)
-	return body_color
+	if name == "head":
+		return body_color.lightened(0.15)
+	if name == "torso":
+		return body_color
+	var heavy_side := "r" if stance == 1 else "l"
+	if name.ends_with("_" + heavy_side):
+		return body_color.darkened(0.2)
+	return body_color.lightened(0.05)
 
 
 func _get_limb_body(name: String) -> ColorRect:
@@ -373,6 +386,29 @@ func _low_held() -> bool:
 	return Input.is_action_pressed(_action("low"))
 
 
+func _attack_stats(name: String) -> Dictionary:
+	if stance == 1:
+		return ATTACKS[name]
+	var swap := {"arm_l": "arm_r", "arm_r": "arm_l", "leg_l": "leg_r", "leg_r": "leg_l"}
+	return ATTACKS[swap[name]]
+
+
+func _effective_side(name: String) -> String:
+	var side: String = ATTACKS[name].side
+	if stance == -1:
+		return "r" if side == "l" else "l"
+	return side
+
+
+func _torso_mult() -> float:
+	var missing := 0
+	if limb_hp["arm_l"].gone:
+		missing += 1
+	if limb_hp["arm_r"].gone:
+		missing += 1
+	return maxf(0.25, missing * 0.5)
+
+
 func _move_speed() -> float:
 	var legs_lost := 0
 	if limb_hp["leg_l"].gone:
@@ -403,6 +439,7 @@ func reset(start_pos: Vector2) -> void:
 	air_hits = 0.0
 	hurt_tilt = 0.0
 	stick_was_up = false
+	stance = 1
 	rig.rotation = 0.0
 	_set_hitbox(false)
 	rig.self_modulate = Color.WHITE

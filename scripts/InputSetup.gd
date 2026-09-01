@@ -13,6 +13,7 @@ func _ready() -> void:
 	_key_action("p1_leg_r", [KEY_J], JOY_BUTTON_B, 0)
 	_key_action("p1_high", [KEY_R], JOY_BUTTON_RIGHT_SHOULDER, 0)
 	_key_action("p1_low", [KEY_E], JOY_BUTTON_LEFT_SHOULDER, 0)
+	_key_action("p1_stance", [KEY_C], JOY_BUTTON_BACK, 0)
 	# Player 2 — keyboard (arrows) + controller slot 1
 	_key_action("p2_move_left", [KEY_LEFT], JOY_BUTTON_DPAD_LEFT, 1)
 	_key_action("p2_move_right", [KEY_RIGHT], JOY_BUTTON_DPAD_RIGHT, 1)
@@ -24,6 +25,7 @@ func _ready() -> void:
 	_key_action("p2_leg_r", [KEY_APOSTROPHE], JOY_BUTTON_B, 1)
 	_key_action("p2_high", [KEY_O], JOY_BUTTON_RIGHT_SHOULDER, 1)
 	_key_action("p2_low", [KEY_P], JOY_BUTTON_LEFT_SHOULDER, 1)
+	_key_action("p2_stance", [KEY_V], JOY_BUTTON_BACK, 1)
 
 
 func _key_action(action: StringName, keys: Array, pad_button: int = -1, pad_device: int = 0) -> void:
