@@ -14,19 +14,19 @@ const LIMB_MAX := {
 const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
 
 const ARM_L := {
-	"name": "arm_l", "target": "arm_l", "windup": 0.12, "active": 0.08, "recovery": 0.18,
+	"name": "arm_l", "side": "l", "base_class": "arm", "windup": 0.12, "active": 0.08, "recovery": 0.18,
 	"damage": 6.0, "knockback": 230.0, "stun": 0.26, "reach": Vector2(70, 70), "aim": 0.0, "swing": 0.9,
 }
 const ARM_R := {
-	"name": "arm_r", "target": "arm_r", "windup": 0.12, "active": 0.08, "recovery": 0.18,
+	"name": "arm_r", "side": "r", "base_class": "arm", "windup": 0.12, "active": 0.08, "recovery": 0.18,
 	"damage": 6.0, "knockback": 230.0, "stun": 0.26, "reach": Vector2(70, 70), "aim": 0.0, "swing": 0.9,
 }
 const LEG_L := {
-	"name": "leg_l", "target": "leg_l", "windup": 0.28, "active": 0.10, "recovery": 0.30,
+	"name": "leg_l", "side": "l", "base_class": "leg", "windup": 0.28, "active": 0.10, "recovery": 0.30,
 	"damage": 10.0, "knockback": 330.0, "stun": 0.40, "reach": Vector2(95, 100), "aim": 12.0, "swing": 1.2,
 }
 const LEG_R := {
-	"name": "leg_r", "target": "leg_r", "windup": 0.28, "active": 0.10, "recovery": 0.30,
+	"name": "leg_r", "side": "r", "base_class": "leg", "windup": 0.28, "active": 0.10, "recovery": 0.30,
 	"damage": 10.0, "knockback": 330.0, "stun": 0.40, "reach": Vector2(95, 100), "aim": 12.0, "swing": 1.2,
 }
 const ATTACKS := {"arm_l": ARM_L, "arm_r": ARM_R, "leg_l": LEG_L, "leg_r": LEG_R}
@@ -89,6 +89,7 @@ func _physics_process(delta: float) -> void:
 
 	var tilt_target := hurt_tilt if state == State.HURT else 0.0
 	rig.rotation = lerpf(rig.rotation, tilt_target, delta * 12.0)
+	rig.position.y = 14.0 if _is_legless() else 0.0
 	move_and_slide()
 	_update_flash(delta)
 
@@ -97,7 +98,7 @@ func _apply_idle() -> void:
 	if input_locked:
 		velocity.x = 0.0
 		return
-	if _jump_pressed() and is_on_floor():
+	if _jump_pressed() and is_on_floor() and not _is_legless():
 		velocity.y = JUMP_VELOCITY
 		return
 	for name in ["arm_l", "arm_r", "leg_l", "leg_r"]:
@@ -109,14 +110,32 @@ func _apply_idle() -> void:
 
 func _start_attack(data: Dictionary) -> void:
 	state = State.ATTACK
-	attack = data
+	attack = data.duplicate()
 	attack_phase = "windup"
 	attack_time = 0.0
 	hit_landed = false
+
+	var aim: float = data.aim
+	if _is_legless():
+		aim = 24.0
+	elif _high_held():
+		aim = -16.0
+	elif _low_held():
+		aim = 22.0
+	attack["aim"] = aim
+	if _is_legless():
+		attack["target_class"] = "leg"
+	elif _high_held():
+		attack["target_class"] = "arm"
+	elif _low_held():
+		attack["target_class"] = "leg"
+	else:
+		attack["target_class"] = data.base_class
+
 	var reach: Vector2 = data.reach
 	hitbox_shape.shape.size = reach
 	hitbox.position.x = facing * (reach.x / 2.0 + 30.0)
-	hitbox.position.y = data.aim
+	hitbox.position.y = aim
 	_set_hitbox(false)
 	_anim_attack(data)
 
@@ -158,7 +177,8 @@ func _check_hits() -> void:
 		if victim == null or victim == self:
 			continue
 		hit_landed = true
-		var target: String = _fallback_target(victim, attack.target)
+		var base_target: String = attack.side + "_" + attack.target_class
+		var target: String = _fallback_target(victim, base_target)
 		victim.take_part_hit(target, attack.damage, global_position.x, attack.knockback, attack.stun)
 		return
 
@@ -314,12 +334,37 @@ func _swing_limb(name: String) -> Node2D:
 func _fallback_target(victim, desired: String) -> String:
 	if not victim.limb_hp[desired].gone:
 		return desired
+	var pair := _pair(desired)
+	if pair != "" and not victim.limb_hp[pair].gone:
+		return pair
 	if not victim.limb_hp["torso"].gone:
 		return "torso"
-	for name in LIMBS:
-		if not victim.limb_hp[name].gone:
-			return name
 	return "torso"
+
+
+func _pair(name: String) -> String:
+	match name:
+		"arm_l":
+			return "arm_r"
+		"arm_r":
+			return "arm_l"
+		"leg_l":
+			return "leg_r"
+		"leg_r":
+			return "leg_l"
+	return ""
+
+
+func _is_legless() -> bool:
+	return limb_hp["leg_l"].gone and limb_hp["leg_r"].gone
+
+
+func _high_held() -> bool:
+	return Input.is_action_pressed(_action("high"))
+
+
+func _low_held() -> bool:
+	return Input.is_action_pressed(_action("low"))
 
 
 func _move_speed() -> float:
