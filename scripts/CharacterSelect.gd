@@ -37,10 +37,8 @@ func _build() -> void:
 		add_child(name_label)
 		cards.append(card)
 
-	p1_cursor = _make_cursor(Color(1, 0.35, 0.3))
-	p2_cursor = _make_cursor(Color(0.35, 0.55, 1))
-
-	_add_label("Player 1: A/D move, F select    |    Player 2: arrows, K select", 26, Color(1, 1, 1), 588, 40)
+	p1_cursor = _make_cursor(Color(1, 0.3, 0.28))
+	p2_cursor = _make_cursor(Color(0.32, 0.55, 1.0))
 	_update()
 
 
@@ -55,13 +53,17 @@ func _add_label(text: String, font_size: int, color: Color, y: float, h: float) 
 	add_child(label)
 
 
-func _make_cursor(col: Color) -> ColorRect:
-	var rect := ColorRect.new()
-	rect.color = Color(col.r, col.g, col.b, 0.4)
-	rect.size = CARD_SIZE
-	rect.z_index = 2
-	add_child(rect)
-	return rect
+func _make_cursor(col: Color) -> Panel:
+	var panel := Panel.new()
+	var outline := StyleBoxFlat.new()
+	outline.bg_color = Color(0, 0, 0, 0)
+	outline.border_color = col
+	outline.set_border_width_all(5)
+	panel.add_theme_stylebox_override("panel", outline)
+	panel.size = CARD_SIZE
+	panel.z_index = 2
+	add_child(panel)
+	return panel
 
 
 func _physics_process(delta: float) -> void:
@@ -90,10 +92,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _update() -> void:
-	p1_cursor.position = cards[GameState.p1_index].position
-	p2_cursor.position = cards[GameState.p2_index].position
-	p1_cursor.color = Color(1, 0.35, 0.3, 0.9) if GameState.p1_ready else Color(1, 0.35, 0.3, 0.4)
-	p2_cursor.color = Color(0.35, 0.55, 1, 0.9) if GameState.p2_ready else Color(0.35, 0.55, 1, 0.4)
+	p1_cursor.position = cards[GameState.p1_index].position + Vector2(-5, -5)
+	p2_cursor.position = cards[GameState.p2_index].position + Vector2(5, 5)
 
 
 func _wrap(index: int) -> int:

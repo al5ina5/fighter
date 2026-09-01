@@ -7,14 +7,13 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	if Input.is_action_just_pressed("ui_accept") or _any_start():
+	if _should_start():
 		get_tree().change_scene_to_file("res://scenes/CharacterSelect.tscn")
 
 
 func _build_ui() -> void:
 	_add_label("FIGHTER", 150, Color(1, 0.85, 0.2), 220, 180)
 	_add_label("A limb-by-limb underground fistfight", 40, Color(0.8, 0.8, 0.85), 420, 60)
-	_add_label("Press SPACE or ENTER to start", 28, Color(1, 1, 1), 540, 40)
 
 
 func _add_label(text: String, font_size: int, color: Color, y: float, h: float) -> void:
@@ -28,7 +27,12 @@ func _add_label(text: String, font_size: int, color: Color, y: float, h: float) 
 	add_child(label)
 
 
-func _any_start() -> bool:
+func _should_start() -> bool:
+	if Input.is_action_just_pressed("ui_accept"):
+		return true
+	for action in ["p1_jump", "p1_light", "p1_heavy", "p2_jump", "p2_light", "p2_heavy"]:
+		if Input.is_action_just_pressed(action):
+			return true
 	for device in [0, 1]:
 		if Input.is_joy_button_pressed(device, JOY_BUTTON_START):
 			return true

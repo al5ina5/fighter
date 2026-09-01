@@ -3,15 +3,15 @@ extends Node
 
 func _ready() -> void:
 	# Player 1 — keyboard (WASD) + controller slot 0
-	_key_action("p1_move_left", [KEY_A])
-	_key_action("p1_move_right", [KEY_D])
+	_key_action("p1_move_left", [KEY_A], JOY_BUTTON_DPAD_LEFT, 0)
+	_key_action("p1_move_right", [KEY_D], JOY_BUTTON_DPAD_RIGHT, 0)
 	_key_action("p1_jump", [KEY_W, KEY_SPACE], JOY_BUTTON_A, 0)
 	_key_action("p1_light", [KEY_F], JOY_BUTTON_X, 0)
 	_key_action("p1_heavy", [KEY_G], JOY_BUTTON_Y, 0)
 	_key_action("p1_block", [KEY_S], JOY_BUTTON_LEFT_SHOULDER, 0)
 	# Player 2 — keyboard (arrows) + controller slot 1
-	_key_action("p2_move_left", [KEY_LEFT])
-	_key_action("p2_move_right", [KEY_RIGHT])
+	_key_action("p2_move_left", [KEY_LEFT], JOY_BUTTON_DPAD_LEFT, 1)
+	_key_action("p2_move_right", [KEY_RIGHT], JOY_BUTTON_DPAD_RIGHT, 1)
 	_key_action("p2_jump", [KEY_UP, KEY_ENTER], JOY_BUTTON_A, 1)
 	_key_action("p2_light", [KEY_K], JOY_BUTTON_X, 1)
 	_key_action("p2_heavy", [KEY_L], JOY_BUTTON_Y, 1)
