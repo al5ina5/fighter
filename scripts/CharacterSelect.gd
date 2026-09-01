@@ -5,8 +5,8 @@ const CARD_GAP := 40.0
 const CARD_Y := 340.0
 
 var cards: Array = []
-var p1_cursor: ColorRect
-var p2_cursor: ColorRect
+var p1_cursor: Panel
+var p2_cursor: Panel
 var launch_timer := -1.0
 
 
