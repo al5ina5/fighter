@@ -12,6 +12,7 @@ const LIMB_MAX := {
 	"leg_l": 40.0, "leg_r": 40.0,
 }
 const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
+const LIMB_BASE_X := {"arm_l": -18.0, "arm_r": 18.0, "leg_l": -7.0, "leg_r": 7.0}
 
 const ATTACKS := {
 	"high": {
@@ -71,6 +72,7 @@ func _physics_process(delta: float) -> void:
 		_refresh_limb_colors()
 
 	_update_facing()
+	_apply_stance_visuals()
 	if not is_on_floor():
 		velocity.y += GRAVITY * delta
 
@@ -353,6 +355,15 @@ func _limb_available(name: String) -> bool:
 
 func front_side() -> String:
 	return "r" if stance == 1 else "l"
+
+
+func _apply_stance_visuals() -> void:
+	var front := front_side()
+	var rear := "l" if front == "r" else "r"
+	_get_limb_node("arm_" + front).position.x = LIMB_BASE_X["arm_r"]
+	_get_limb_node("arm_" + rear).position.x = LIMB_BASE_X["arm_l"]
+	_get_limb_node("leg_" + front).position.x = LIMB_BASE_X["leg_r"]
+	_get_limb_node("leg_" + rear).position.x = LIMB_BASE_X["leg_l"]
 
 
 func _rear_side() -> String:
