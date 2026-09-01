@@ -20,6 +20,8 @@ var player2
 var phase: int = Phase.COUNTDOWN
 var p1_bars := {}
 var p2_bars := {}
+var start_menu: Panel
+var start_menu_open := false
 
 
 func _ready() -> void:
@@ -31,7 +33,63 @@ func _ready() -> void:
 	player1.died.connect(_on_ko.bind(player2))
 	player2.died.connect(_on_ko.bind(player1))
 	_build_limb_hud()
+	_build_start_menu()
 	_start_round()
+
+
+func _build_start_menu() -> void:
+	start_menu = Panel.new()
+	start_menu.name = "StartMenu"
+	start_menu.position = Vector2(440, 180)
+	start_menu.size = Vector2(400, 360)
+	start_menu.visible = false
+	start_menu.z_index = 20
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.04, 0.07, 0.97)
+	style.border_color = Color(1, 0.85, 0.2, 1)
+	style.set_border_width_all(3)
+	style.corner_radius_top_left = 8
+	style.corner_radius_top_right = 8
+	style.corner_radius_bottom_left = 8
+	style.corner_radius_bottom_right = 8
+	start_menu.add_theme_stylebox_override("panel", style)
+	$HUD.add_child(start_menu)
+
+	var title := Label.new()
+	title.text = "START MENU"
+	title.position = Vector2(0, 28)
+	title.size = Vector2(400, 60)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 42)
+	title.add_theme_color_override("font_color", Color(1, 0.85, 0.2))
+	start_menu.add_child(title)
+
+	var restart := Button.new()
+	restart.name = "RestartFight"
+	restart.text = "RESTART FIGHT"
+	restart.position = Vector2(55, 120)
+	restart.size = Vector2(290, 64)
+	restart.add_theme_font_size_override("font_size", 26)
+	restart.pressed.connect(_on_restart_pressed)
+	start_menu.add_child(restart)
+
+	var main_menu := Button.new()
+	main_menu.name = "MainMenu"
+	main_menu.text = "MAIN MENU"
+	main_menu.position = Vector2(55, 204)
+	main_menu.size = Vector2(290, 64)
+	main_menu.add_theme_font_size_override("font_size", 26)
+	main_menu.pressed.connect(_on_main_menu_pressed)
+	start_menu.add_child(main_menu)
+
+	var hint := Label.new()
+	hint.text = "Esc / Start: close menu"
+	hint.position = Vector2(0, 294)
+	hint.size = Vector2(400, 36)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 18)
+	hint.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+	start_menu.add_child(hint)
 
 
 func _build_limb_hud() -> void:
@@ -116,8 +174,36 @@ func _separate_players() -> void:
 
 
 func _process(_delta: float) -> void:
+	if Input.is_action_just_pressed("ui_cancel") or _start_pressed():
+		_toggle_start_menu()
+		return
 	if phase == Phase.KO and Input.is_physical_key_pressed(KEY_R):
 		_reset_round()
+
+
+func _start_pressed() -> bool:
+	for device in [0, 1]:
+		if Input.is_joy_button_pressed(device, JOY_BUTTON_START):
+			return true
+	return false
+
+
+func _toggle_start_menu() -> void:
+	start_menu_open = not start_menu_open
+	start_menu.visible = start_menu_open
+	_lock_players(start_menu_open)
+	if start_menu_open:
+		start_menu.get_node("RestartFight").grab_focus()
+
+
+func _on_restart_pressed() -> void:
+	start_menu_open = false
+	start_menu.visible = false
+	_reset_round()
+
+
+func _on_main_menu_pressed() -> void:
+	get_tree().change_scene_to_file("res://scenes/Menu.tscn")
 
 
 func _start_round() -> void:
