@@ -1,9 +1,10 @@
 extends CharacterBody2D
 class_name Player
 
-const SPEED := 300.0
-const JUMP_VELOCITY := -400.0
-const GRAVITY := 980.0
+const SCALE := 3.0
+const SPEED := 300.0 * SCALE
+const JUMP_VELOCITY := -400.0 * SCALE
+const GRAVITY := 980.0 * SCALE
 const GUARD_MAX := 100.0
 
 const LIMB_MAX := {
@@ -15,10 +16,12 @@ const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
 const LIGHT := {
 	"windup": 0.10, "active": 0.10, "recovery": 0.20,
 	"damage": 5.0, "knockback": 160.0, "stun": 0.22, "reach": Vector2(70, 80),
+	"aim": 0.0, "can_hit": ["head", "torso", "arm_l", "arm_r"],
 }
 const HEAVY := {
 	"windup": 0.35, "active": 0.12, "recovery": 0.35,
 	"damage": 12.0, "knockback": 300.0, "stun": 0.36, "reach": Vector2(95, 95),
+	"aim": 10.0, "can_hit": ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"],
 }
 
 signal died
@@ -51,6 +54,7 @@ var hurt_tilt := 0.0
 
 
 func _ready() -> void:
+	scale = Vector2(SCALE, SCALE)
 	_setup_limbs()
 	_set_hitbox(false)
 
@@ -119,6 +123,7 @@ func _start_attack(data: Dictionary) -> void:
 	var reach: Vector2 = data.reach
 	hitbox_shape.shape.size = reach
 	hitbox.position.x = facing * (reach.x / 2.0 + 30.0)
+	hitbox.position.y = data.aim
 	_set_hitbox(false)
 
 
@@ -151,9 +156,12 @@ func _check_hits() -> void:
 			continue
 		if not area.has_meta("limb"):
 			continue
-		hit_landed = true
 		var limb: String = area.get_meta("limb")
+		if limb not in attack.can_hit:
+			continue
+		hit_landed = true
 		victim.take_part_hit(limb, attack.damage, global_position.x, attack.knockback, attack.stun)
+		return
 
 
 func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, stun: float) -> void:
@@ -186,13 +194,13 @@ func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, st
 	hurt_timer = stun
 	_set_hitbox(false)
 	var dir_away := 1.0 if global_position.x >= source_x else -1.0
-	velocity = Vector2(dir_away * kb, -130.0)
+	velocity = Vector2(dir_away * kb * SCALE, -130.0 * SCALE)
 	hurt_tilt = dir_away * 0.16
-	rig.self_modulate = Color(3.0, 3.0, 3.0)
-	flash_timer = 0.12
+	_flash_limb(limb_name)
+	_spawn_impact(_get_limb_hurtbox(limb_name).global_position)
 	Effects.hitstop(0.05 if dmg <= 6.0 else 0.09)
 	Effects.add_shake(3.0 if dmg <= 6.0 else 7.0)
-	print("HIT dmg=", dmg, " -> hp=", health)
+	print("HIT dmg=", dmg, " -> ", limb_name, " | hp=", health)
 
 	if _is_ko():
 		health = maxf(health, 0.0)
@@ -205,7 +213,7 @@ func _blocked_hit(dmg: float, source_x: float, kb: float, _stun: float) -> void:
 	health -= dmg * 0.15
 	guard -= dmg * 1.5
 	var dir_away := 1.0 if global_position.x >= source_x else -1.0
-	velocity = Vector2(dir_away * kb * 0.4, 0.0)
+	velocity = Vector2(dir_away * kb * 0.4 * SCALE, 0.0)
 	rig.self_modulate = Color(1.5, 1.5, 1.5)
 	flash_timer = 0.08
 	Effects.hitstop(0.03)
@@ -215,7 +223,7 @@ func _blocked_hit(dmg: float, source_x: float, kb: float, _stun: float) -> void:
 		guard = GUARD_MAX
 		state = State.HURT
 		hurt_timer = 0.6
-		velocity = Vector2(dir_away * kb * 1.2, -150.0)
+		velocity = Vector2(dir_away * kb * 1.2 * SCALE, -150.0 * SCALE)
 		Effects.add_shake(9.0)
 		print("GUARD BREAK!")
 
@@ -232,6 +240,27 @@ func _set_hitbox(active: bool) -> void:
 	hitbox_debug.visible = active
 
 
+func _flash_limb(limb_name: String) -> void:
+	var limb_body: ColorRect = _get_limb_body(limb_name)
+	limb_body.self_modulate = Color(3.0, 3.0, 3.0)
+	var tw := create_tween()
+	tw.tween_interval(0.06)
+	tw.tween_property(limb_body, "self_modulate", Color.WHITE, 0.08)
+
+
+func _spawn_impact(pos: Vector2) -> void:
+	var burst := ColorRect.new()
+	burst.color = Color(1, 0.95, 0.5, 0.9)
+	burst.size = Vector2(22, 22)
+	burst.position = pos - Vector2(11, 11)
+	burst.z_index = 5
+	add_child(burst)
+	var tw := create_tween()
+	tw.tween_property(burst, "scale", Vector2(1.7, 1.7), 0.12)
+	tw.parallel().tween_property(burst, "modulate:a", 0.0, 0.12)
+	tw.tween_callback(burst.queue_free)
+
+
 func _setup_limbs() -> void:
 	for name in LIMBS:
 		var body: ColorRect = _get_limb_body(name)
@@ -245,9 +274,11 @@ func _limb_color(name: String) -> Color:
 	match name:
 		"head":
 			return body_color.lightened(0.15)
-		"arm_l", "arm_r":
-			return body_color.darkened(0.1)
-		"leg_l", "leg_r":
+		"torso":
+			return body_color
+		"arm_l", "leg_l":
+			return body_color.lightened(0.05)
+		"arm_r", "leg_r":
 			return body_color.darkened(0.2)
 	return body_color
 

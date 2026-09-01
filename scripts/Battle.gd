@@ -33,14 +33,14 @@ func _spawn_players() -> void:
 	p1.player_number = 1
 	p1.body_color = GameState.p1_char().color
 	p1.name = GameState.p1_char().name
-	p1.position = Vector2(520, 520)
+	p1.position = Vector2(420, 400)
 	add_child(p1)
 
 	var p2 = PLAYER_TS.instantiate()
 	p2.player_number = 2
 	p2.body_color = GameState.p2_char().color
 	p2.name = GameState.p2_char().name
-	p2.position = Vector2(760, 520)
+	p2.position = Vector2(860, 400)
 	add_child(p2)
 
 
@@ -83,8 +83,8 @@ func _on_ko(winner) -> void:
 
 
 func _reset_round() -> void:
-	player1.reset(Vector2(520, 520))
-	player2.reset(Vector2(760, 520))
+	player1.reset(Vector2(420, 400))
+	player2.reset(Vector2(860, 400))
 	_start_round()
 
 
