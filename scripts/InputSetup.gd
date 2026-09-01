@@ -3,16 +3,20 @@ extends Node
 
 func _ready() -> void:
 	# Player 1 — keyboard (WASD) + controller slot 0
-	_setup_action("p1_move_left", [KEY_A])
-	_setup_action("p1_move_right", [KEY_D])
-	_setup_action("p1_jump", [KEY_W, KEY_SPACE])
+	_key_action("p1_move_left", [KEY_A])
+	_key_action("p1_move_right", [KEY_D])
+	_key_action("p1_jump", [KEY_W, KEY_SPACE], JOY_BUTTON_A, 0)
+	_key_action("p1_light", [KEY_F], JOY_BUTTON_X, 0)
+	_key_action("p1_heavy", [KEY_G], JOY_BUTTON_Y, 0)
 	# Player 2 — keyboard (arrows) + controller slot 1
-	_setup_action("p2_move_left", [KEY_LEFT])
-	_setup_action("p2_move_right", [KEY_RIGHT])
-	_setup_action("p2_jump", [KEY_UP, KEY_ENTER])
+	_key_action("p2_move_left", [KEY_LEFT])
+	_key_action("p2_move_right", [KEY_RIGHT])
+	_key_action("p2_jump", [KEY_UP, KEY_ENTER], JOY_BUTTON_A, 1)
+	_key_action("p2_light", [KEY_K], JOY_BUTTON_X, 1)
+	_key_action("p2_heavy", [KEY_L], JOY_BUTTON_Y, 1)
 
 
-func _setup_action(action: StringName, keys: Array) -> void:
+func _key_action(action: StringName, keys: Array, pad_button: int = -1, pad_device: int = 0) -> void:
 	if InputMap.has_action(action):
 		InputMap.erase_action(action)
 	InputMap.add_action(action)
@@ -20,3 +24,8 @@ func _setup_action(action: StringName, keys: Array) -> void:
 		var ev := InputEventKey.new()
 		ev.physical_keycode = key
 		InputMap.action_add_event(action, ev)
+	if pad_button >= 0:
+		var pad := InputEventJoypadButton.new()
+		pad.button_index = pad_button
+		pad.device = pad_device
+		InputMap.action_add_event(action, pad)
