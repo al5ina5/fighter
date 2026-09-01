@@ -4,8 +4,8 @@ extends Node2D
 @onready var p2_bar: ProgressBar = $HUD/P2Bar
 @onready var ko_label: Label = $HUD/KOLabel
 
-var player1: Player
-var player2: Player
+var player1
+var player2
 
 
 func _ready() -> void:
@@ -23,6 +23,6 @@ func _physics_process(_delta: float) -> void:
 		p2_bar.value = maxf(player2.health, 0.0)
 
 
-func _on_ko(winner: Player) -> void:
+func _on_ko(winner) -> void:
 	ko_label.text = "%s WINS!" % winner.name
 	ko_label.visible = true
