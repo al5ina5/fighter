@@ -107,7 +107,7 @@ func _apply_idle() -> void:
 		if _is_legless():
 			data["band"] = "low"
 			data["aim"] = 26.0
-		var swing := _swing_limb(data.band)
+		var swing := _swing_limb(data.band, heavy)
 		if swing != "":
 			data["name"] = swing
 			_start_attack(data)
@@ -130,21 +130,19 @@ func _attack_data(band: String, heavy: bool) -> Dictionary:
 	return MID_L.duplicate()
 
 
-func _swing_limb(band: String) -> String:
-	var near := "r" if facing == 1 else "l"
-	var far := "l" if near == "r" else "r"
-	var order: Array = [near, far]
-	if band == "high" or band == "mid":
-		for side in order:
-			if _limb_available("arm_" + side):
-				return "arm_" + side
-		return ""
-	for side in order:
-		if _limb_available("leg_" + side):
-			return "leg_" + side
-	for side in order:
-		if _limb_available("arm_" + side):
-			return "arm_" + side
+func _swing_limb(band: String, heavy: bool) -> String:
+	var front := front_side()
+	var back := "l" if front == "r" else "r"
+	var side := back if heavy else front
+	var limb_class := "arm" if band == "high" or band == "mid" else "leg"
+	var limb := limb_class + "_" + side
+
+	if _limb_available(limb):
+		return limb
+	if band == "low" and _is_legless():
+		var low_punch := "arm_" + side
+		if _limb_available(low_punch):
+			return low_punch
 	return ""
 
 
@@ -213,6 +211,7 @@ func _pick_target(victim, band: String) -> String:
 
 func _target_priority(victim, band: String) -> Array:
 	var lead: String = victim.front_side()
+	var rear := "l" if lead == "r" else "r"
 	if victim._is_legless():
 		match band:
 			"high":
@@ -227,7 +226,7 @@ func _target_priority(victim, band: String) -> Array:
 		"mid":
 			return ["arm_" + lead, "torso"]
 		"low":
-			return ["leg_" + lead, "torso"]
+			return ["leg_" + lead, "leg_" + rear, "torso"]
 	return ["torso"]
 
 
