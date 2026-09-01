@@ -205,20 +205,31 @@ func _check_hits() -> void:
 
 
 func _pick_target(victim, band: String) -> String:
-	var lead: String = victim.lead_side()
-	var other := "l" if lead == "r" else "r"
-	var priority: Array
-	match band:
-		"high":
-			priority = ["arm_" + lead, "arm_" + other, "head", "torso"]
-		"mid":
-			priority = ["torso", "arm_" + lead, "arm_" + other, "torso"]
-		"low":
-			priority = ["leg_" + lead, "leg_" + other, "torso"]
-	for name in priority:
+	for name in _target_priority(victim, band):
 		if not victim.limb_hp[name].gone:
 			return name
 	return "torso"
+
+
+func _target_priority(victim, band: String) -> Array:
+	var lead: String = victim.lead_side()
+	var other := "l" if lead == "r" else "r"
+	if victim._is_legless():
+		match band:
+			"high":
+				return ["head", "torso"]
+			"mid":
+				return ["head", "torso"]
+			"low":
+				return ["torso", "arm_" + lead, "arm_" + other]
+	match band:
+		"high":
+			return ["head", "torso"]
+		"mid":
+			return ["arm_" + lead, "arm_" + other, "torso"]
+		"low":
+			return ["leg_" + lead, "leg_" + other, "torso"]
+	return ["torso"]
 
 
 func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, stun: float) -> void:
@@ -332,8 +343,8 @@ func _limb_color(name: String) -> Color:
 		return body_color
 	var lead := "r" if stance == 1 else "l"
 	if name.ends_with("_" + lead):
-		return body_color.darkened(0.2)
-	return body_color.lightened(0.05)
+		return body_color.darkened(0.28)
+	return body_color.lightened(0.12)
 
 
 func _get_limb_body(name: String) -> ColorRect:
