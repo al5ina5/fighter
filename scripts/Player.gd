@@ -212,8 +212,8 @@ func _pick_target(victim, band: String, heavy: bool) -> String:
 
 
 func _target_priority(victim, band: String, heavy: bool) -> Array:
-	var closer := "l" if global_position.x < victim.global_position.x else "r"
-	var farther := "r" if closer == "l" else "l"
+	var front: String = victim.front_side()
+	var back := "l" if front == "r" else "r"
 	if victim._is_legless():
 		match band:
 			"high":
@@ -222,19 +222,19 @@ func _target_priority(victim, band: String, heavy: bool) -> Array:
 				return ["head", "torso"]
 			"low":
 				if heavy:
-					return ["arm_" + farther, "arm_" + closer, "torso"]
-				return ["arm_" + closer, "arm_" + farther, "torso"]
+					return ["arm_" + back, "arm_" + front, "torso"]
+				return ["arm_" + front, "arm_" + back, "torso"]
 	match band:
 		"high":
 			return ["head", "torso"]
 		"mid":
 			if heavy:
-				return ["arm_" + farther, "arm_" + closer, "torso"]
-			return ["arm_" + closer, "arm_" + farther, "torso"]
+				return ["arm_" + back, "arm_" + front, "torso"]
+			return ["arm_" + front, "arm_" + back, "torso"]
 		"low":
 			if heavy:
-				return ["leg_" + farther, "leg_" + closer, "torso"]
-			return ["leg_" + closer, "leg_" + farther, "torso"]
+				return ["leg_" + back, "leg_" + front, "torso"]
+			return ["leg_" + front, "leg_" + back, "torso"]
 	return ["torso"]
 
 
@@ -347,10 +347,10 @@ func _limb_color(name: String) -> Color:
 		return body_color.lightened(0.15)
 	if name == "torso":
 		return body_color
-	var lead := "r" if stance == 1 else "l"
-	if name.ends_with("_" + lead):
-		return body_color.darkened(0.12)
-	return body_color.lightened(0.10)
+	var front := "r" if stance == 1 else "l"
+	if name.ends_with("_" + front):
+		return body_color.lightened(0.10)
+	return body_color.darkened(0.10)
 
 
 func _get_limb_body(name: String) -> ColorRect:
@@ -375,6 +375,10 @@ func _has_arm() -> bool:
 
 func _has_leg() -> bool:
 	return not (limb_hp["leg_l"].gone and limb_hp["leg_r"].gone)
+
+
+func front_side() -> String:
+	return "r" if stance == 1 else "l"
 
 
 func _torso_mult() -> float:
