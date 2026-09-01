@@ -14,7 +14,9 @@ const HEAVY := {
 	"damage": 12.0, "knockback": 300.0, "reach": Vector2(95, 95),
 }
 
-enum State { IDLE, ATTACK, HURT }
+signal died
+
+enum State { IDLE, ATTACK, HURT, KO }
 
 @export var player_number: int = 1
 @export var body_color: Color = Color(0.85, 0.2, 0.2)
@@ -58,6 +60,8 @@ func _physics_process(delta: float) -> void:
 			hurt_timer -= delta
 			if hurt_timer <= 0.0:
 				state = State.IDLE
+		State.KO:
+			velocity.x *= 0.9
 
 	move_and_slide()
 	_update_flash(delta)
@@ -124,7 +128,14 @@ func take_hit(dmg: float, source_x: float, kb: float) -> void:
 	velocity = Vector2(dir_away * kb, -130.0)
 	visual.self_modulate = Color(3.0, 3.0, 3.0)
 	flash_timer = 0.12
+	Effects.hitstop(0.05 if dmg <= 6.0 else 0.09)
+	Effects.add_shake(3.0 if dmg <= 6.0 else 7.0)
 	print("HIT dmg=", dmg, " -> hp=", health)
+	if health <= 0.0:
+		health = 0.0
+		state = State.KO
+		Effects.add_shake(12.0)
+		emit_signal("died")
 
 
 func _update_flash(delta: float) -> void:

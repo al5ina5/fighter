@@ -17,6 +17,7 @@ config/features=PackedStringArray("4.7")
 [autoload]
 
 InputSetup="*res://scripts/InputSetup.gd"
+Effects="*res://scripts/Effects.gd"
 
 [display]
 
