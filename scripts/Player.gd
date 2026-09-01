@@ -33,7 +33,7 @@ const ATTACKS := {"arm_l": ARM_L, "arm_r": ARM_R, "leg_l": LEG_L, "leg_r": LEG_R
 
 signal died
 
-enum State { IDLE, ATTACK, HURT, KO, BLOCK }
+enum State { IDLE, ATTACK, HURT, KO }
 
 @export var player_number: int = 1
 @export var body_color: Color = Color(0.85, 0.2, 0.2)
@@ -87,12 +87,7 @@ func _physics_process(delta: float) -> void:
 				state = State.IDLE
 		State.KO:
 			velocity.x *= 0.9
-		State.BLOCK:
-			velocity.x = 0.0
-			if not _block_held() or not is_on_floor():
-				state = State.IDLE
 
-	rig.modulate = Color(0.7, 0.7, 1.0) if state == State.BLOCK else Color.WHITE
 	var tilt_target := hurt_tilt if state == State.HURT else 0.0
 	rig.rotation = lerpf(rig.rotation, tilt_target, delta * 12.0)
 	move_and_slide()
@@ -103,18 +98,12 @@ func _apply_idle() -> void:
 	if input_locked:
 		velocity.x = 0.0
 		return
-	if _block_held() and is_on_floor():
-		state = State.BLOCK
-		return
 	if _jump_pressed() and is_on_floor():
 		velocity.y = JUMP_VELOCITY
 		return
 	for name in ["arm_l", "arm_r", "leg_l", "leg_r"]:
 		if Input.is_action_just_pressed(_action(name)):
-			if _limb_available(name):
-				_start_attack(ATTACKS[name])
-			else:
-				velocity.x = 0.0
+			_start_attack(ATTACKS[name])
 			return
 	velocity.x = _move_dir() * _move_speed()
 
@@ -134,7 +123,7 @@ func _start_attack(data: Dictionary) -> void:
 
 
 func _anim_attack(data: Dictionary) -> void:
-	var limb_node: Node2D = _get_limb_node(data.name)
+	var limb_node: Node2D = _swing_limb(data.name)
 	if attack_tween:
 		attack_tween.kill()
 	attack_tween = create_tween()
@@ -170,12 +159,13 @@ func _check_hits() -> void:
 		if victim == null or victim == self:
 			continue
 		hit_landed = true
-		victim.take_part_hit(attack.target, attack.damage, global_position.x, attack.knockback, attack.stun)
+		var target: String = _fallback_target(victim, attack.target)
+		victim.take_part_hit(target, attack.damage, global_position.x, attack.knockback, attack.stun)
 		return
 
 
 func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, stun: float) -> void:
-	if state == State.BLOCK:
+	if _is_blocking():
 		_blocked_hit(dmg, source_x, kb, stun)
 		return
 
@@ -314,8 +304,24 @@ func _get_limb_node(name: String) -> Node2D:
 	return get_node("Rig/" + name)
 
 
-func _limb_available(name: String) -> bool:
-	return not limb_hp[name].gone
+func _swing_limb(name: String) -> Node2D:
+	if not limb_hp[name].gone:
+		return _get_limb_node(name)
+	for n in ["arm_l", "arm_r", "leg_l", "leg_r"]:
+		if not limb_hp[n].gone:
+			return _get_limb_node(n)
+	return _get_limb_node("torso")
+
+
+func _fallback_target(victim, desired: String) -> String:
+	if not victim.limb_hp[desired].gone:
+		return desired
+	if not victim.limb_hp["torso"].gone:
+		return "torso"
+	for name in LIMBS:
+		if not victim.limb_hp[name].gone:
+			return name
+	return "torso"
 
 
 func _move_speed() -> float:
@@ -383,7 +389,7 @@ func _jump_pressed() -> bool:
 	return pressed
 
 
-func _block_held() -> bool:
+func _is_blocking() -> bool:
 	if Input.is_action_pressed(_action("block")):
 		return true
 	return _move_dir() * facing < -0.3
