@@ -1,5 +1,7 @@
 extends Node2D
 
+const PLAYER_TS := preload("res://scenes/Player.tscn")
+
 enum Phase { COUNTDOWN, FIGHT, KO }
 
 @onready var p1_bar: ProgressBar = $HUD/P1Bar
@@ -16,6 +18,7 @@ var phase: int = Phase.COUNTDOWN
 
 
 func _ready() -> void:
+	_spawn_players()
 	var players := get_tree().get_nodes_in_group("players")
 	players.sort_custom(func(a, b): return a.player_number < b.player_number)
 	player1 = players[0]
@@ -23,6 +26,22 @@ func _ready() -> void:
 	player1.died.connect(_on_ko.bind(player2))
 	player2.died.connect(_on_ko.bind(player1))
 	_start_round()
+
+
+func _spawn_players() -> void:
+	var p1 = PLAYER_TS.instantiate()
+	p1.player_number = 1
+	p1.body_color = GameState.p1_char().color
+	p1.name = GameState.p1_char().name
+	p1.position = Vector2(520, 520)
+	add_child(p1)
+
+	var p2 = PLAYER_TS.instantiate()
+	p2.player_number = 2
+	p2.body_color = GameState.p2_char().color
+	p2.name = GameState.p2_char().name
+	p2.position = Vector2(760, 520)
+	add_child(p2)
 
 
 func _physics_process(_delta: float) -> void:

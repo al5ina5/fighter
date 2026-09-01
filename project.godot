@@ -11,13 +11,14 @@ config_version=5
 [application]
 
 config/name="fighter"
-run/main_scene="res://scenes/Battle.tscn"
+run/main_scene="res://scenes/Menu.tscn"
 config/features=PackedStringArray("4.7")
 
 [autoload]
 
 InputSetup="*res://scripts/InputSetup.gd"
 Effects="*res://scripts/Effects.gd"
+GameState="*res://scripts/GameState.gd"
 
 [display]
 
@@ -25,6 +26,10 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+
+[gui]
+
+theme/custom_font="res://assets/fonts/alagard.ttf"
 
 [rendering]
 
