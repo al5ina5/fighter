@@ -6,6 +6,12 @@ const JUMP_VELOCITY := -400.0
 const GRAVITY := 980.0
 const GUARD_MAX := 100.0
 
+const LIMB_MAX := {
+	"head": 30.0, "torso": 100.0, "arm_l": 40.0, "arm_r": 40.0,
+	"leg_l": 40.0, "leg_r": 40.0,
+}
+const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
+
 const LIGHT := {
 	"windup": 0.10, "active": 0.10, "recovery": 0.20,
 	"damage": 5.0, "knockback": 160.0, "stun": 0.22, "reach": Vector2(70, 80),
@@ -22,14 +28,15 @@ enum State { IDLE, ATTACK, HURT, KO, BLOCK }
 @export var player_number: int = 1
 @export var body_color: Color = Color(0.85, 0.2, 0.2)
 
-@onready var visual: Node2D = $Visual
-@onready var body: ColorRect = $Visual/Body
+@onready var rig: Node2D = $Rig
+@onready var face: ColorRect = $Rig/Face
 @onready var hitbox: Area2D = $Hitbox
 @onready var hitbox_shape: CollisionShape2D = $Hitbox/HitboxShape
 @onready var hitbox_debug: ColorRect = $Hitbox/DebugRect
 
 var health := 100.0
 var guard := GUARD_MAX
+var limb_hp: Dictionary = {}
 var state: int = State.IDLE
 var facing := 1
 var hurt_timer := 0.0
@@ -44,7 +51,7 @@ var hurt_tilt := 0.0
 
 
 func _ready() -> void:
-	body.color = body_color
+	_setup_limbs()
 	_set_hitbox(false)
 
 
@@ -72,9 +79,9 @@ func _physics_process(delta: float) -> void:
 			if not _block_held() or not is_on_floor():
 				state = State.IDLE
 
-	visual.modulate = Color(0.7, 0.7, 1.0) if state == State.BLOCK else Color.WHITE
+	rig.modulate = Color(0.7, 0.7, 1.0) if state == State.BLOCK else Color.WHITE
 	var tilt_target := hurt_tilt if state == State.HURT else 0.0
-	visual.rotation = lerpf(visual.rotation, tilt_target, delta * 12.0)
+	rig.rotation = lerpf(rig.rotation, tilt_target, delta * 12.0)
 	move_and_slide()
 	_update_flash(delta)
 
@@ -90,11 +97,17 @@ func _apply_idle() -> void:
 		velocity.y = JUMP_VELOCITY
 		return
 	if _light_pressed():
-		_start_attack(LIGHT)
+		if _has_arm():
+			_start_attack(LIGHT)
+		else:
+			velocity.x = 0.0
 	elif _heavy_pressed():
-		_start_attack(HEAVY)
+		if _has_leg():
+			_start_attack(HEAVY)
+		else:
+			velocity.x = 0.0
 	else:
-		velocity.x = _move_input() * SPEED
+		velocity.x = _move_input() * _move_speed()
 
 
 func _start_attack(data: Dictionary) -> void:
@@ -131,15 +144,25 @@ func _tick_attack(delta: float) -> void:
 
 func _check_hits() -> void:
 	for area in hitbox.get_overlapping_areas():
-		var victim := area.get_parent()
-		if victim is Player and victim != self:
-			hit_landed = true
-			victim.take_hit(attack.damage, global_position.x, attack.knockback, attack.stun)
+		var victim: Node = area
+		while victim != null and not (victim is Player):
+			victim = victim.get_parent()
+		if victim == null or victim == self:
+			continue
+		if not area.has_meta("limb"):
+			continue
+		hit_landed = true
+		var limb: String = area.get_meta("limb")
+		victim.take_part_hit(limb, attack.damage, global_position.x, attack.knockback, attack.stun)
 
 
-func take_hit(dmg: float, source_x: float, kb: float, stun: float) -> void:
+func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, stun: float) -> void:
 	if state == State.BLOCK:
 		_blocked_hit(dmg, source_x, kb, stun)
+		return
+
+	var limb: Dictionary = limb_hp[limb_name]
+	if limb.gone:
 		return
 
 	if not is_on_floor():
@@ -149,20 +172,30 @@ func take_hit(dmg: float, source_x: float, kb: float, stun: float) -> void:
 	else:
 		air_hits = 0.0
 
-	health -= dmg
+	limb.hp -= dmg
+	if limb_name == "torso" or limb_name == "head":
+		health -= dmg
+
+	if limb.hp <= 0.0:
+		limb.gone = true
+		_get_limb_body(limb_name).visible = false
+		Effects.add_shake(8.0)
+		print("LIMB LOST: ", limb_name)
+
 	state = State.HURT
 	hurt_timer = stun
 	_set_hitbox(false)
 	var dir_away := 1.0 if global_position.x >= source_x else -1.0
 	velocity = Vector2(dir_away * kb, -130.0)
 	hurt_tilt = dir_away * 0.16
-	visual.self_modulate = Color(3.0, 3.0, 3.0)
+	rig.self_modulate = Color(3.0, 3.0, 3.0)
 	flash_timer = 0.12
 	Effects.hitstop(0.05 if dmg <= 6.0 else 0.09)
 	Effects.add_shake(3.0 if dmg <= 6.0 else 7.0)
 	print("HIT dmg=", dmg, " -> hp=", health)
-	if health <= 0.0:
-		health = 0.0
+
+	if _is_ko():
+		health = maxf(health, 0.0)
 		state = State.KO
 		Effects.add_shake(12.0)
 		emit_signal("died")
@@ -173,7 +206,7 @@ func _blocked_hit(dmg: float, source_x: float, kb: float, _stun: float) -> void:
 	guard -= dmg * 1.5
 	var dir_away := 1.0 if global_position.x >= source_x else -1.0
 	velocity = Vector2(dir_away * kb * 0.4, 0.0)
-	visual.self_modulate = Color(1.5, 1.5, 1.5)
+	rig.self_modulate = Color(1.5, 1.5, 1.5)
 	flash_timer = 0.08
 	Effects.hitstop(0.03)
 	Effects.add_shake(2.0)
@@ -191,12 +224,72 @@ func _update_flash(delta: float) -> void:
 	if flash_timer > 0.0:
 		flash_timer -= delta
 		if flash_timer <= 0.0:
-			visual.self_modulate = Color.WHITE
+			rig.self_modulate = Color.WHITE
 
 
 func _set_hitbox(active: bool) -> void:
 	hitbox_shape.disabled = not active
 	hitbox_debug.visible = active
+
+
+func _setup_limbs() -> void:
+	for name in LIMBS:
+		var body: ColorRect = _get_limb_body(name)
+		body.color = _limb_color(name)
+		var hurtbox: Area2D = _get_limb_hurtbox(name)
+		hurtbox.set_meta("limb", name)
+		limb_hp[name] = {"hp": LIMB_MAX[name], "gone": false}
+
+
+func _limb_color(name: String) -> Color:
+	match name:
+		"head":
+			return body_color.lightened(0.15)
+		"arm_l", "arm_r":
+			return body_color.darkened(0.1)
+		"leg_l", "leg_r":
+			return body_color.darkened(0.2)
+	return body_color
+
+
+func _get_limb_body(name: String) -> ColorRect:
+	return get_node("Rig/" + name + "/Body")
+
+
+func _get_limb_hurtbox(name: String) -> Area2D:
+	return get_node("Rig/" + name + "/Hurtbox")
+
+
+func _has_arm() -> bool:
+	return not (limb_hp["arm_l"].gone and limb_hp["arm_r"].gone)
+
+
+func _has_leg() -> bool:
+	return not (limb_hp["leg_l"].gone and limb_hp["leg_r"].gone)
+
+
+func _move_speed() -> float:
+	var legs_lost := 0
+	if limb_hp["leg_l"].gone:
+		legs_lost += 1
+	if limb_hp["leg_r"].gone:
+		legs_lost += 1
+	match legs_lost:
+		1:
+			return SPEED * 0.7
+		2:
+			return SPEED * 0.45
+	return SPEED
+
+
+func _is_ko() -> bool:
+	if health <= 0.0:
+		return true
+	if limb_hp["head"].gone:
+		return true
+	if limb_hp["arm_l"].gone and limb_hp["arm_r"].gone and limb_hp["leg_l"].gone and limb_hp["leg_r"].gone:
+		return true
+	return false
 
 
 func reset(start_pos: Vector2) -> void:
@@ -210,10 +303,14 @@ func reset(start_pos: Vector2) -> void:
 	input_locked = true
 	air_hits = 0.0
 	hurt_tilt = 0.0
-	visual.rotation = 0.0
+	rig.rotation = 0.0
 	_set_hitbox(false)
-	visual.self_modulate = Color.WHITE
-	visual.modulate = Color.WHITE
+	rig.self_modulate = Color.WHITE
+	rig.modulate = Color.WHITE
+	for name in LIMBS:
+		limb_hp[name].hp = LIMB_MAX[name]
+		limb_hp[name].gone = false
+		_get_limb_body(name).visible = true
 
 
 func _move_input() -> float:
@@ -253,7 +350,8 @@ func _update_facing() -> void:
 	if opponent == null:
 		return
 	facing = 1 if opponent.global_position.x >= global_position.x else -1
-	visual.scale.x = facing
+	face.offset_left = 16.0 * facing
+	face.offset_right = face.offset_left + 8.0
 
 
 func _find_opponent() -> Node:
