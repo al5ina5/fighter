@@ -14,20 +14,20 @@ const LIMB_MAX := {
 const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
 
 const ARM_L := {
-	"name": "arm_l", "side": "l", "base_class": "arm", "windup": 0.12, "active": 0.08, "recovery": 0.18,
-	"damage": 6.0, "knockback": 230.0, "stun": 0.26, "reach": Vector2(70, 70), "aim": 0.0, "swing": 0.9,
+	"name": "arm_l", "side": "l", "base_class": "arm", "windup": 0.10, "active": 0.08, "recovery": 0.16,
+	"damage": 5.0, "knockback": 180.0, "stun": 0.22, "reach": Vector2(70, 70), "aim": 0.0, "swing": 0.8,
 }
 const ARM_R := {
-	"name": "arm_r", "side": "r", "base_class": "arm", "windup": 0.12, "active": 0.08, "recovery": 0.18,
-	"damage": 6.0, "knockback": 230.0, "stun": 0.26, "reach": Vector2(70, 70), "aim": 0.0, "swing": 0.9,
+	"name": "arm_r", "side": "r", "base_class": "arm", "windup": 0.20, "active": 0.10, "recovery": 0.28,
+	"damage": 9.0, "knockback": 300.0, "stun": 0.32, "reach": Vector2(75, 75), "aim": 0.0, "swing": 1.0,
 }
 const LEG_L := {
-	"name": "leg_l", "side": "l", "base_class": "leg", "windup": 0.28, "active": 0.10, "recovery": 0.30,
-	"damage": 10.0, "knockback": 330.0, "stun": 0.40, "reach": Vector2(95, 100), "aim": 12.0, "swing": 1.2,
+	"name": "leg_l", "side": "l", "base_class": "leg", "windup": 0.24, "active": 0.10, "recovery": 0.26,
+	"damage": 8.0, "knockback": 260.0, "stun": 0.34, "reach": Vector2(90, 95), "aim": 12.0, "swing": 1.0,
 }
 const LEG_R := {
-	"name": "leg_r", "side": "r", "base_class": "leg", "windup": 0.28, "active": 0.10, "recovery": 0.30,
-	"damage": 10.0, "knockback": 330.0, "stun": 0.40, "reach": Vector2(95, 100), "aim": 12.0, "swing": 1.2,
+	"name": "leg_r", "side": "r", "base_class": "leg", "windup": 0.38, "active": 0.12, "recovery": 0.42,
+	"damage": 14.0, "knockback": 400.0, "stun": 0.46, "reach": Vector2(100, 105), "aim": 12.0, "swing": 1.3,
 }
 const ATTACKS := {"arm_l": ARM_L, "arm_r": ARM_R, "leg_l": LEG_L, "leg_r": LEG_R}
 
@@ -89,7 +89,7 @@ func _physics_process(delta: float) -> void:
 
 	var tilt_target := hurt_tilt if state == State.HURT else 0.0
 	rig.rotation = lerpf(rig.rotation, tilt_target, delta * 12.0)
-	rig.position.y = 14.0 if _is_legless() else 0.0
+	rig.position.y = 38.0 if _is_legless() else 0.0
 	move_and_slide()
 	_update_flash(delta)
 
@@ -103,7 +103,11 @@ func _apply_idle() -> void:
 		return
 	for name in ["arm_l", "arm_r", "leg_l", "leg_r"]:
 		if Input.is_action_just_pressed(_action(name)):
-			_start_attack(ATTACKS[name])
+			if _limb_available(name):
+				_start_attack(ATTACKS[name])
+			else:
+				var kind := "ARM" if name.begins_with("arm") else "LEG"
+				_float_text(global_position + Vector2(0, -70.0), "NO %s" % kind, Color(1, 0.3, 0.3))
 			return
 	velocity.x = _move_dir() * _move_speed()
 
@@ -141,7 +145,7 @@ func _start_attack(data: Dictionary) -> void:
 
 
 func _anim_attack(data: Dictionary) -> void:
-	var limb_node: Node2D = _swing_limb(data.name)
+	var limb_node: Node2D = _get_limb_node(data.name)
 	if attack_tween:
 		attack_tween.kill()
 	attack_tween = create_tween()
@@ -342,37 +346,19 @@ func _get_limb_node(name: String) -> Node2D:
 	return get_node("Rig/" + name)
 
 
-func _swing_limb(name: String) -> Node2D:
-	if not limb_hp[name].gone:
-		return _get_limb_node(name)
-	for n in ["arm_l", "arm_r", "leg_l", "leg_r"]:
-		if not limb_hp[n].gone:
-			return _get_limb_node(n)
-	return _get_limb_node("torso")
+func _limb_available(name: String) -> bool:
+	return not limb_hp[name].gone
 
 
 func _fallback_target(victim, desired: String) -> String:
 	if not victim.limb_hp[desired].gone:
 		return desired
-	var pair := _pair(desired)
-	if pair != "" and not victim.limb_hp[pair].gone:
-		return pair
-	if not victim.limb_hp["torso"].gone:
+	if desired.begins_with("arm"):
 		return "torso"
+	var other := "leg_r" if desired == "leg_l" else "leg_l"
+	if not victim.limb_hp[other].gone:
+		return other
 	return "torso"
-
-
-func _pair(name: String) -> String:
-	match name:
-		"arm_l":
-			return "arm_r"
-		"arm_r":
-			return "arm_l"
-		"leg_l":
-			return "leg_r"
-		"leg_r":
-			return "leg_l"
-	return ""
 
 
 func _is_legless() -> bool:
@@ -395,20 +381,14 @@ func _move_speed() -> float:
 		legs_lost += 1
 	match legs_lost:
 		1:
-			return SPEED * 0.7
+			return SPEED * 0.65
 		2:
-			return SPEED * 0.45
+			return SPEED * 0.35
 	return SPEED
 
 
 func _is_ko() -> bool:
-	if health <= 0.0:
-		return true
-	if limb_hp["head"].gone:
-		return true
-	if limb_hp["arm_l"].gone and limb_hp["arm_r"].gone and limb_hp["leg_l"].gone and limb_hp["leg_r"].gone:
-		return true
-	return false
+	return health <= 0.0
 
 
 func reset(start_pos: Vector2) -> void:

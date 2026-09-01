@@ -101,6 +101,18 @@ func _physics_process(_delta: float) -> void:
 		p2_guard.value = maxf(player2.guard, 0.0)
 		_update_limb_bars(p1_bars, player1)
 		_update_limb_bars(p2_bars, player2)
+		_separate_players()
+
+
+func _separate_players() -> void:
+	if not (player1.is_on_floor() and player2.is_on_floor()):
+		return
+	var dx: float = player2.global_position.x - player1.global_position.x
+	if absf(dx) < 200.0:
+		var dir: float = 1.0 if dx >= 0.0 else -1.0
+		var push: float = (200.0 - absf(dx)) / 2.0
+		player1.global_position.x -= dir * push
+		player2.global_position.x += dir * push
 
 
 func _process(_delta: float) -> void:
