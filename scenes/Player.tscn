@@ -30,8 +30,16 @@ shape = SubResource("RectangleShape2D_player")
 
 [node name="Rig" type="Node2D" parent="."]
 
+[node name="StanceMarker" type="ColorRect" parent="Rig"]
+offset_left = -5.0
+offset_top = 42.0
+offset_right = 5.0
+offset_bottom = 45.0
+color = Color(0.35, 0.85, 1, 0.9)
+
 [node name="head" type="Node2D" parent="Rig"]
 position = Vector2(0, -24)
+z_index = 3
 
 [node name="Body" type="ColorRect" parent="Rig/head"]
 offset_left = -9.0
@@ -52,6 +60,7 @@ shape = SubResource("RectangleShape2D_head")
 
 [node name="torso" type="Node2D" parent="Rig"]
 position = Vector2(0, -10)
+z_index = 1
 
 [node name="Body" type="ColorRect" parent="Rig/torso"]
 offset_left = -13.0

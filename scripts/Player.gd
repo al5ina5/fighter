@@ -6,14 +6,13 @@ const SPEED := 300.0 * SCALE
 const JUMP_VELOCITY := -400.0 * SCALE
 const GRAVITY := 980.0 * SCALE
 const GUARD_MAX := 100.0
+const STANCE_POSE_SPEED := 180.0
 
 const LIMB_MAX := {
 	"head": 30.0, "torso": 100.0, "arm_l": 40.0, "arm_r": 40.0,
 	"leg_l": 40.0, "leg_r": 40.0,
 }
 const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
-const LIMB_BASE_X := {"arm_l": -18.0, "arm_r": 18.0, "leg_l": -7.0, "leg_r": 7.0}
-
 const ATTACKS := {
 	"high": {
 		false: {"band": "high", "heavy": false, "windup": 0.12, "active": 0.08, "recovery": 0.20, "damage": 6.0, "knockback": 200.0, "stun": 0.24, "aim": -14.0, "reach": Vector2(80, 80), "swing": 0.9},
@@ -38,6 +37,7 @@ enum State { IDLE, ATTACK, HURT, KO }
 
 @onready var rig: Node2D = $Rig
 @onready var face: ColorRect = $Rig/Face
+@onready var stance_marker: ColorRect = $Rig/StanceMarker
 @onready var hitbox: Area2D = $Hitbox
 @onready var hitbox_shape: CollisionShape2D = $Hitbox/HitboxShape
 
@@ -63,16 +63,18 @@ var attack_tween: Tween
 func _ready() -> void:
 	scale = Vector2(SCALE, SCALE)
 	_setup_limbs()
+	_snap_stance_visuals()
 	_set_hitbox(false)
 
 
 func _physics_process(delta: float) -> void:
-	if not input_locked and Input.is_action_just_pressed(_action("stance")):
+	if not input_locked and state == State.IDLE and Input.is_action_just_pressed(_action("stance")):
 		stance = -stance
 		_refresh_limb_colors()
+		_show_stance_change()
 
 	_update_facing()
-	_apply_stance_visuals()
+	_apply_stance_visuals(delta)
 	if not is_on_floor():
 		velocity.y += GRAVITY * delta
 
@@ -113,9 +115,6 @@ func _apply_idle() -> void:
 	if band != "":
 		var heavy := _heavy_held()
 		var data: Dictionary = _attack_data(band, heavy)
-		if _is_legless():
-			data["band"] = "low"
-			data["aim"] = 26.0
 		var swing_limb := _attacking_limb(data.band, heavy)
 		if swing_limb == "":
 			_float_text(global_position + Vector2(0, -70.0), "NO LIMB", Color(1, 0.3, 0.3))
@@ -132,15 +131,9 @@ func _attack_data(band: String, heavy: bool) -> Dictionary:
 
 
 func _attacking_limb(band: String, heavy: bool) -> String:
-	var side := _rear_side() if heavy else front_side()
-	var limb_class := "arm" if band == "high" or band == "mid" else "leg"
-	var limb := limb_class + "_" + side
+	var limb := CombatRules.source_limb(band, heavy, stance)
 	if _limb_available(limb):
 		return limb
-	if band == "low" and _is_legless():
-		var low_punch := "arm_" + side
-		if _limb_available(low_punch):
-			return low_punch
 	return ""
 
 
@@ -196,37 +189,17 @@ func _check_hits() -> void:
 			continue
 		hit_landed = true
 		var target: String = _pick_target(victim, attack.band)
+		if target == "":
+			return
 		victim.take_part_hit(target, attack.band, attack.damage, global_position.x, attack.knockback, attack.stun)
 		return
 
 
 func _pick_target(victim, band: String) -> String:
-	var front: String = victim.front_side()
-	var rear := "l" if front == "r" else "r"
-	var priority: Array
-
-	if victim._is_legless():
-		match band:
-			"high", "mid":
-				priority = ["head", "torso"]
-			"low":
-				priority = ["arm_" + front, "torso"]
-	else:
-		match band:
-			"high":
-				priority = ["head", "torso"]
-			"mid":
-				priority = ["arm_" + front, "torso"]
-			"low":
-				priority = ["leg_" + front, "leg_" + rear, "torso"]
-
-	for name in priority:
-		if not victim.limb_hp[name].gone:
-			return name
-	return "torso"
+	return CombatRules.pick_target(band, victim.stance, victim.limb_hp)
 
 
-func take_part_hit(limb_name: String, band: String, dmg: float, source_x: float, kb: float, stun: float) -> void:
+func take_part_hit(limb_name: String, _band: String, dmg: float, source_x: float, kb: float, stun: float) -> void:
 	if _is_blocking():
 		_blocked_hit(dmg, source_x, kb, stun)
 		return
@@ -242,17 +215,15 @@ func take_part_hit(limb_name: String, band: String, dmg: float, source_x: float,
 	else:
 		air_hits = 0
 
-	if limb_name == "torso" and band == "mid":
-		dmg *= _torso_mult()
-
-	limb.hp -= dmg
+	limb.hp = maxf(0.0, limb.hp - dmg)
 	if limb_name == "torso":
-		health -= dmg
+		health = limb.hp
 
 	var hit_position := _get_limb_hurtbox(limb_name).global_position
 	if limb.hp <= 0.0:
 		limb.gone = true
-		_get_limb_body(limb_name).visible = false
+		if limb_name != "torso":
+			_get_limb_body(limb_name).visible = false
 		Effects.add_shake(8.0)
 		_float_text(hit_position, "%s LOST!" % limb_name.to_upper(), Color(1, 0.4, 0.2))
 
@@ -276,7 +247,9 @@ func take_part_hit(limb_name: String, band: String, dmg: float, source_x: float,
 
 
 func _blocked_hit(dmg: float, source_x: float, kb: float, _stun: float) -> void:
-	health -= dmg * 0.15
+	var torso: Dictionary = limb_hp["torso"]
+	torso.hp = maxf(0.0, torso.hp - dmg * 0.15)
+	health = torso.hp
 	guard -= dmg * 1.5
 	var dir_away := 1.0 if global_position.x >= source_x else -1.0
 	velocity = Vector2(dir_away * kb * 0.4 * SCALE, 0.0)
@@ -292,6 +265,10 @@ func _blocked_hit(dmg: float, source_x: float, kb: float, _stun: float) -> void:
 		velocity = Vector2(dir_away * kb * 1.2 * SCALE, -150.0 * SCALE)
 		_float_text(global_position + Vector2(0, -150.0), "GUARD BREAK!", Color(1, 0.2, 0.2))
 		Effects.add_shake(9.0)
+	if health <= 0.0:
+		torso.gone = true
+		state = State.KO
+		emit_signal("died")
 
 
 func _interrupt_attack() -> void:
@@ -354,29 +331,40 @@ func _limb_available(name: String) -> bool:
 
 
 func front_side() -> String:
-	return "r" if stance == 1 else "l"
+	return CombatRules.close_side(stance)
 
 
-func _apply_stance_visuals() -> void:
-	var front := front_side()
-	var rear := "l" if front == "r" else "r"
-	_get_limb_node("arm_" + front).position.x = LIMB_BASE_X["arm_r"]
-	_get_limb_node("arm_" + rear).position.x = LIMB_BASE_X["arm_l"]
-	_get_limb_node("leg_" + front).position.x = LIMB_BASE_X["leg_r"]
-	_get_limb_node("leg_" + rear).position.x = LIMB_BASE_X["leg_l"]
+func _apply_stance_visuals(delta: float) -> void:
+	for limb_name in ["arm_l", "arm_r", "leg_l", "leg_r"]:
+		var limb_node := _get_limb_node(limb_name)
+		var target_x := CombatRules.pose_x(limb_name, stance, facing)
+		limb_node.position.x = move_toward(limb_node.position.x, target_x, STANCE_POSE_SPEED * delta)
+		limb_node.z_index = 2 if CombatRules.is_close_limb(limb_name, stance) else 0
+	stance_marker.position.x = move_toward(
+		stance_marker.position.x,
+		float(facing) * CombatRules.LEG_OFFSET_X - stance_marker.size.x / 2.0,
+		STANCE_POSE_SPEED * delta
+	)
+
+
+func _snap_stance_visuals() -> void:
+	for limb_name in ["arm_l", "arm_r", "leg_l", "leg_r"]:
+		var limb_node := _get_limb_node(limb_name)
+		limb_node.position.x = CombatRules.pose_x(limb_name, stance, facing)
+		limb_node.z_index = 2 if CombatRules.is_close_limb(limb_name, stance) else 0
+	stance_marker.position.x = float(facing) * CombatRules.LEG_OFFSET_X - stance_marker.size.x / 2.0
+
+
+func _show_stance_change() -> void:
+	var side_name := "RIGHT" if front_side() == CombatRules.RIGHT else "LEFT"
+	_float_text(global_position + Vector2(0, -115.0), "%s LEAD" % side_name, Color(0.4, 0.9, 1.0))
+	stance_marker.modulate = Color(2.0, 2.0, 1.0, 1.0)
+	var tw := create_tween()
+	tw.tween_property(stance_marker, "modulate", Color.WHITE, 0.18)
 
 
 func _rear_side() -> String:
-	return "l" if front_side() == "r" else "r"
-
-
-func _torso_mult() -> float:
-	var missing := 0
-	if limb_hp["arm_l"].gone:
-		missing += 1
-	if limb_hp["arm_r"].gone:
-		missing += 1
-	return maxf(0.25, missing * 0.5)
+	return CombatRules.rear_side(stance)
 
 
 func _is_legless() -> bool:
@@ -398,7 +386,7 @@ func _move_speed() -> float:
 
 
 func _is_ko() -> bool:
-	return health <= 0.0
+	return limb_hp["head"].gone or limb_hp["torso"].gone
 
 
 func reset(start_pos: Vector2) -> void:
@@ -425,6 +413,7 @@ func reset(start_pos: Vector2) -> void:
 		limb_hp[name].gone = false
 		_get_limb_body(name).visible = true
 	_refresh_limb_colors()
+	_snap_stance_visuals()
 
 
 func _flash_limb(limb_name: String) -> void:
