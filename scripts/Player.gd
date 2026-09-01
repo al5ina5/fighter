@@ -442,9 +442,9 @@ func _spawn_impact(pos: Vector2) -> void:
 	var burst := ColorRect.new()
 	burst.color = Color(1, 0.95, 0.5, 0.9)
 	burst.size = Vector2(22, 22)
-	burst.position = pos - Vector2(11, 11)
 	burst.z_index = 5
-	add_child(burst)
+	get_parent().add_child(burst)
+	burst.global_position = pos - Vector2(11, 11)
 	var tw := create_tween()
 	tw.tween_property(burst, "scale", Vector2(1.7, 1.7), 0.12)
 	tw.parallel().tween_property(burst, "modulate:a", 0.0, 0.12)
