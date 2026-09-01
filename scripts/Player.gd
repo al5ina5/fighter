@@ -12,7 +12,6 @@ const LIMB_MAX := {
 	"leg_l": 40.0, "leg_r": 40.0,
 }
 const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
-const LEG_BASE := {"leg_l": -7.0, "leg_r": 7.0}
 
 const HIGH_L := {"band": "high", "heavy": false, "windup": 0.12, "active": 0.08, "recovery": 0.20, "damage": 6.0, "knockback": 200.0, "stun": 0.24, "aim": -14.0, "reach": Vector2(80, 80), "swing": 0.9}
 const HIGH_H := {"band": "high", "heavy": true, "windup": 0.24, "active": 0.10, "recovery": 0.34, "damage": 11.0, "knockback": 320.0, "stun": 0.36, "aim": -14.0, "reach": Vector2(90, 90), "swing": 1.1}
@@ -64,7 +63,6 @@ func _physics_process(delta: float) -> void:
 		_refresh_limb_colors()
 
 	_update_facing()
-	_apply_stance_pose()
 
 	if not is_on_floor():
 		velocity.y += GRAVITY * delta
@@ -374,20 +372,6 @@ func _has_leg() -> bool:
 
 func front_side() -> String:
 	return "r" if stance == 1 else "l"
-
-
-func _apply_stance_pose() -> void:
-	if state == State.KO:
-		return
-	var f := float(facing)
-	var lead := "r" if stance == 1 else "l"
-	for leg in ["leg_l", "leg_r"]:
-		var node: Node2D = _get_limb_node(leg)
-		var base: float = LEG_BASE[leg]
-		if leg.ends_with("_" + lead):
-			node.position.x = base + 6.0 * f
-		else:
-			node.position.x = base - 3.0 * f
 
 
 func _torso_mult() -> float:
