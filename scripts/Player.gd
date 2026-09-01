@@ -102,7 +102,7 @@ func _apply_idle() -> void:
 			band = suffix
 			break
 	if band != "":
-		var heavy := Input.is_action_pressed(_action("heavy"))
+		var heavy := _heavy_held()
 		var data := _attack_data(band, heavy)
 		if _is_legless():
 			data["band"] = "low"
@@ -122,12 +122,12 @@ func _apply_idle() -> void:
 func _attack_data(band: String, heavy: bool) -> Dictionary:
 	match band:
 		"high":
-			return HIGH_H if heavy else HIGH_L
+			return (HIGH_H if heavy else HIGH_L).duplicate()
 		"mid":
-			return MID_H if heavy else MID_L
+			return (MID_H if heavy else MID_L).duplicate()
 		"low":
-			return LOW_H if heavy else LOW_L
-	return MID_L
+			return (LOW_H if heavy else LOW_L).duplicate()
+	return MID_L.duplicate()
 
 
 func _swing_limb(band: String) -> String:
@@ -489,6 +489,13 @@ func _jump_pressed() -> bool:
 	var pressed := up and not stick_was_up
 	stick_was_up = up
 	return pressed
+
+
+func _heavy_held() -> bool:
+	if Input.is_action_pressed(_action("heavy")):
+		return true
+	var trigger := Input.get_joy_axis(_pad_device(), JOY_AXIS_TRIGGER_RIGHT)
+	return trigger > 0.5
 
 
 func _is_blocking() -> bool:

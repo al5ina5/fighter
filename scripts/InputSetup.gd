@@ -10,7 +10,7 @@ func _ready() -> void:
 	_key_action("p1_high", [KEY_F], JOY_BUTTON_Y, 0)
 	_key_action("p1_mid", [KEY_G], JOY_BUTTON_X, 0)
 	_key_action("p1_low", [KEY_H], JOY_BUTTON_A, 0)
-	_key_action("p1_heavy", [KEY_R], JOY_BUTTON_B, 0)
+	_key_action("p1_heavy", [KEY_R], JOY_BUTTON_RIGHT_SHOULDER, 0)
 	_key_action("p1_stance", [KEY_C], JOY_BUTTON_RIGHT_STICK, 0)
 	# Player 2 — keyboard (arrows) + controller slot 1
 	_key_action("p2_move_left", [KEY_LEFT], JOY_BUTTON_DPAD_LEFT, 1)
@@ -20,7 +20,7 @@ func _ready() -> void:
 	_key_action("p2_high", [KEY_K], JOY_BUTTON_Y, 1)
 	_key_action("p2_mid", [KEY_L], JOY_BUTTON_X, 1)
 	_key_action("p2_low", [KEY_SEMICOLON], JOY_BUTTON_A, 1)
-	_key_action("p2_heavy", [KEY_P], JOY_BUTTON_B, 1)
+	_key_action("p2_heavy", [KEY_P], JOY_BUTTON_RIGHT_SHOULDER, 1)
 	_key_action("p2_stance", [KEY_V], JOY_BUTTON_RIGHT_STICK, 1)
 
 
