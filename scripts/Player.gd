@@ -13,16 +13,23 @@ const LIMB_MAX := {
 }
 const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
 
-const LIGHT := {
-	"windup": 0.10, "active": 0.10, "recovery": 0.20,
-	"damage": 5.0, "knockback": 160.0, "stun": 0.22, "reach": Vector2(70, 80),
-	"aim": 0.0, "can_hit": ["head", "torso", "arm_l", "arm_r"],
+const ARM_L := {
+	"name": "arm_l", "target": "arm_l", "windup": 0.12, "active": 0.08, "recovery": 0.18,
+	"damage": 6.0, "knockback": 230.0, "stun": 0.26, "reach": Vector2(70, 70), "aim": 0.0, "swing": 0.9,
 }
-const HEAVY := {
-	"windup": 0.35, "active": 0.12, "recovery": 0.35,
-	"damage": 12.0, "knockback": 300.0, "stun": 0.36, "reach": Vector2(95, 95),
-	"aim": 10.0, "can_hit": ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"],
+const ARM_R := {
+	"name": "arm_r", "target": "arm_r", "windup": 0.12, "active": 0.08, "recovery": 0.18,
+	"damage": 6.0, "knockback": 230.0, "stun": 0.26, "reach": Vector2(70, 70), "aim": 0.0, "swing": 0.9,
 }
+const LEG_L := {
+	"name": "leg_l", "target": "leg_l", "windup": 0.28, "active": 0.10, "recovery": 0.30,
+	"damage": 10.0, "knockback": 330.0, "stun": 0.40, "reach": Vector2(95, 100), "aim": 12.0, "swing": 1.2,
+}
+const LEG_R := {
+	"name": "leg_r", "target": "leg_r", "windup": 0.28, "active": 0.10, "recovery": 0.30,
+	"damage": 10.0, "knockback": 330.0, "stun": 0.40, "reach": Vector2(95, 100), "aim": 12.0, "swing": 1.2,
+}
+const ATTACKS := {"arm_l": ARM_L, "arm_r": ARM_R, "leg_l": LEG_L, "leg_r": LEG_R}
 
 signal died
 
@@ -51,6 +58,8 @@ var hit_landed := false
 var input_locked := false
 var air_hits := 0
 var hurt_tilt := 0.0
+var stick_was_up := false
+var attack_tween: Tween
 
 
 func _ready() -> void:
@@ -100,18 +109,14 @@ func _apply_idle() -> void:
 	if _jump_pressed() and is_on_floor():
 		velocity.y = JUMP_VELOCITY
 		return
-	if _light_pressed():
-		if _has_arm():
-			_start_attack(LIGHT)
-		else:
-			velocity.x = 0.0
-	elif _heavy_pressed():
-		if _has_leg():
-			_start_attack(HEAVY)
-		else:
-			velocity.x = 0.0
-	else:
-		velocity.x = _move_input() * _move_speed()
+	for name in ["arm_l", "arm_r", "leg_l", "leg_r"]:
+		if Input.is_action_just_pressed(_action(name)):
+			if _limb_available(name):
+				_start_attack(ATTACKS[name])
+			else:
+				velocity.x = 0.0
+			return
+	velocity.x = _move_dir() * _move_speed()
 
 
 func _start_attack(data: Dictionary) -> void:
@@ -125,6 +130,16 @@ func _start_attack(data: Dictionary) -> void:
 	hitbox.position.x = facing * (reach.x / 2.0 + 30.0)
 	hitbox.position.y = data.aim
 	_set_hitbox(false)
+	_anim_attack(data)
+
+
+func _anim_attack(data: Dictionary) -> void:
+	var limb_node: Node2D = _get_limb_node(data.name)
+	if attack_tween:
+		attack_tween.kill()
+	attack_tween = create_tween()
+	attack_tween.tween_property(limb_node, "rotation", -facing * data.swing, data.windup + data.active)
+	attack_tween.tween_property(limb_node, "rotation", 0.0, data.recovery)
 
 
 func _tick_attack(delta: float) -> void:
@@ -154,13 +169,8 @@ func _check_hits() -> void:
 			victim = victim.get_parent()
 		if victim == null or victim == self:
 			continue
-		if not area.has_meta("limb"):
-			continue
-		var limb: String = area.get_meta("limb")
-		if limb not in attack.can_hit:
-			continue
 		hit_landed = true
-		victim.take_part_hit(limb, attack.damage, global_position.x, attack.knockback, attack.stun)
+		victim.take_part_hit(attack.target, attack.damage, global_position.x, attack.knockback, attack.stun)
 		return
 
 
@@ -169,6 +179,7 @@ func take_part_hit(limb_name: String, dmg: float, source_x: float, kb: float, st
 		_blocked_hit(dmg, source_x, kb, stun)
 		return
 
+	_interrupt_attack()
 	var limb: Dictionary = limb_hp[limb_name]
 	if limb.gone:
 		return
@@ -226,6 +237,14 @@ func _blocked_hit(dmg: float, source_x: float, kb: float, _stun: float) -> void:
 		velocity = Vector2(dir_away * kb * 1.2 * SCALE, -150.0 * SCALE)
 		Effects.add_shake(9.0)
 		print("GUARD BREAK!")
+
+
+func _interrupt_attack() -> void:
+	if attack_tween:
+		attack_tween.kill()
+		attack_tween = null
+	for name in LIMBS:
+		_get_limb_node(name).rotation = 0.0
 
 
 func _update_flash(delta: float) -> void:
@@ -291,12 +310,12 @@ func _get_limb_hurtbox(name: String) -> Area2D:
 	return get_node("Rig/" + name + "/Hurtbox")
 
 
-func _has_arm() -> bool:
-	return not (limb_hp["arm_l"].gone and limb_hp["arm_r"].gone)
+func _get_limb_node(name: String) -> Node2D:
+	return get_node("Rig/" + name)
 
 
-func _has_leg() -> bool:
-	return not (limb_hp["leg_l"].gone and limb_hp["leg_r"].gone)
+func _limb_available(name: String) -> bool:
+	return not limb_hp[name].gone
 
 
 func _move_speed() -> float:
@@ -334,17 +353,19 @@ func reset(start_pos: Vector2) -> void:
 	input_locked = true
 	air_hits = 0.0
 	hurt_tilt = 0.0
+	stick_was_up = false
 	rig.rotation = 0.0
 	_set_hitbox(false)
 	rig.self_modulate = Color.WHITE
 	rig.modulate = Color.WHITE
+	_interrupt_attack()
 	for name in LIMBS:
 		limb_hp[name].hp = LIMB_MAX[name]
 		limb_hp[name].gone = false
 		_get_limb_body(name).visible = true
 
 
-func _move_input() -> float:
+func _move_dir() -> float:
 	var dir := Input.get_axis(_action("move_left"), _action("move_right"))
 	var stick := Input.get_joy_axis(_pad_device(), JOY_AXIS_LEFT_X)
 	if absf(stick) < 0.15:
@@ -353,19 +374,19 @@ func _move_input() -> float:
 
 
 func _jump_pressed() -> bool:
-	return Input.is_action_just_pressed(_action("jump"))
-
-
-func _light_pressed() -> bool:
-	return Input.is_action_just_pressed(_action("light"))
-
-
-func _heavy_pressed() -> bool:
-	return Input.is_action_just_pressed(_action("heavy"))
+	if Input.is_action_just_pressed(_action("jump")):
+		return true
+	var y := Input.get_joy_axis(_pad_device(), JOY_AXIS_LEFT_Y)
+	var up := y < -0.5
+	var pressed := up and not stick_was_up
+	stick_was_up = up
+	return pressed
 
 
 func _block_held() -> bool:
-	return Input.is_action_pressed(_action("block"))
+	if Input.is_action_pressed(_action("block")):
+		return true
+	return _move_dir() * facing < -0.3
 
 
 func _action(name: String) -> StringName:

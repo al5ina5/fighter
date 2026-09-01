@@ -30,7 +30,7 @@ func _add_label(text: String, font_size: int, color: Color, y: float, h: float) 
 func _should_start() -> bool:
 	if Input.is_action_just_pressed("ui_accept"):
 		return true
-	for action in ["p1_jump", "p1_light", "p1_heavy", "p2_jump", "p2_light", "p2_heavy"]:
+	for action in ["p1_jump", "p1_arm_l", "p1_arm_r", "p1_leg_l", "p1_leg_r", "p2_jump", "p2_arm_l", "p2_arm_r", "p2_leg_l", "p2_leg_r"]:
 		if Input.is_action_just_pressed(action):
 			return true
 	for device in [0, 1]:

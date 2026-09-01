@@ -124,8 +124,8 @@ func _physics_process(delta: float) -> void:
 		get_tree().change_scene_to_file("res://scenes/Battle.tscn")
 		return
 
-	_update_player(1, "p1_move_left", "p1_move_right", "p1_light", p1_cursor, p1_marker, p1_badge)
-	_update_player(2, "p2_move_left", "p2_move_right", "p2_light", p2_cursor, p2_marker, p2_badge)
+	_update_player(1, "p1_move_left", "p1_move_right", "p1_leg_l", p1_cursor, p1_marker, p1_badge)
+	_update_player(2, "p2_move_left", "p2_move_right", "p2_leg_l", p2_cursor, p2_marker, p2_badge)
 	_update_status()
 	banner_time += delta
 	_update_banner()
