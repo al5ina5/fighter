@@ -1,0 +1,8 @@
+# Mixamo-compatible Wavefront material
+newmtl tripo_mat_325ac52a-0211-4f5c-94fe-bf90d80b8d59
+Ka 1.000000 1.000000 1.000000
+Kd 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+d 1.000000
+illum 2
+map_Kd girlypoppums_basecolor.jpg

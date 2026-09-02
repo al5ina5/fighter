@@ -1,0 +1,15 @@
+{
+  "idle": ["Fighting Idle.fbx"],
+  "walk": ["Walk.fbx"],
+  "jump": ["Jump.fbx"],
+  "block": ["Block.fbx"],
+  "hit": ["Hit Reaction.fbx"],
+  "knockout": ["Knockout.fbx"],
+  "high_normal": ["High Normal Attack.fbx"],
+  "high_heavy": ["High Heavy Attack.fbx"],
+  "mid_normal": ["Mid Normal Attack.fbx"],
+  "mid_heavy": ["Mid Heavy Attack.fbx"],
+  "low_normal": ["Low Normal Attack.fbx"],
+  "low_heavy": ["Low Heavy Attack.fbx"]
+}
+

@@ -1,0 +1,8 @@
+# Mixamo-compatible Wavefront material
+newmtl tripo_mat_e2d7f1ba-fe07-4f7f-a076-f464946c0200
+Ka 1.000000 1.000000 1.000000
+Kd 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+d 1.000000
+illum 2
+map_Kd green_blocky_robot_basecolor.jpg
