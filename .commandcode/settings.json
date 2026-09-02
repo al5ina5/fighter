@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(blender:*)",
+      "Shell(python3 - <<'PY' import struct from pathlib import Path path = Path('assets/models/cyber_kingpin_n64/cyber_kingpin_n64.glb') with open(path, 'rb') as f: data = f.read() print('total size', len(data)) magic, version, length = struct.unpack('<4sII', data[:12]) print('magic', magic, 'version', version, 'length', length) offset = 12 while offset < length: chunk_len, chunk_type = struct.unpack('<II', data[offset:offset+8]) chunk_data = data[offset+8:offset+8+chunk_len] print('chunk type', hex(chunk_type), 'len', chunk_len, 'first bytes', chunk_data[:20]) offset += 8 + chunk_len PY)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

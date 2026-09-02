@@ -38,6 +38,7 @@ enum State { IDLE, STANCE, ATTACK, HURT, KO }
 
 @export var player_number: int = 1
 @export var body_color: Color = Color(0.85, 0.2, 0.2)
+@export var show_debug_rig := true
 
 @onready var rig: Node2D = $Rig
 @onready var face: ColorRect = $Rig/Face
@@ -73,6 +74,7 @@ var input_buffer_timer := 0.0
 
 func _ready() -> void:
 	scale = Vector2(SCALE, SCALE)
+	rig.visible = show_debug_rig
 	body_shape.shape = body_shape.shape.duplicate()
 	hitbox_shape.shape = hitbox_shape.shape.duplicate()
 	_setup_limbs()

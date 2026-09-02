@@ -3,6 +3,11 @@
 > Companion to `concept.md`. This is the *how*, step by step.
 > Rule: **complete each step fully, verify it runs, commit, THEN move on.** No skipping ahead.
 
+> Architecture update: the battle now uses a deterministic 2D combat simulation
+> beneath a side-locked 3D presentation. Early `CharacterBody2D` and `Area2D`
+> steps below remain accurate for gameplay; visual references to colored boxes or
+> `Camera2D` describe the prototype history. New models follow `MODEL_INTEGRATION.md`.
+
 ---
 
 ## How to work this roadmap (read this first)
@@ -283,7 +288,7 @@ Add this early (Step 0) and keep it clean — a tidy structure is half of finish
 ---
 
 ## AFTER SHIP (v2+ ideas — NOT v1)
-- 3D arena mode (the Soul Calibur dream) — only once the 2D limb loop is proven.
+- Optional free-roaming 3D arena mode; the current game deliberately remains 2.5D.
 - Online multiplayer (the hardest thing — only after a follow-up game, realistically).
 - Story mode / character bios / a proper underground-circuit narrative.
 - 5th+ fighters: the **laser/dissolve** type, who erases parts at range.
@@ -300,7 +305,7 @@ Add this early (Step 0) and keep it clean — a tidy structure is half of finish
 ---
 
 ## Still-open (from concept.md, resolve before/around Step 11)
-- **Art era:** defaulted to 2D pixel art for v1. Confirm with your brother.
+- **Art era:** resolved as rigged 3D characters in a side-on 2.5D presentation.
 - **Title:** `DISARMED` · `CIRCUIT` · `Limbless` · `STUMPED` · `Rack & Ruin` (campy) or something serious.
 - **Win condition details:** core = torso+head, or does head-loss = instant round loss? (Step 12 depends on it.)
 - **Match format:** single-round is bold. Feel it out in the Step 7 prototype; change if too short.

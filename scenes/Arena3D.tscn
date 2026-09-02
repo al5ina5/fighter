@@ -1,0 +1,173 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/Arena3D.gd" id="1_arena"]
+
+[sub_resource type="Environment" id="Environment_arena"]
+background_mode = 1
+background_color = Color(0.015, 0.018, 0.035, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.18, 0.24, 0.42, 1)
+ambient_light_energy = 0.72
+reflected_light_source = 2
+tonemap_mode = 2
+fog_enabled = true
+fog_light_color = Color(0.07, 0.09, 0.16, 1)
+fog_light_energy = 0.55
+fog_density = 0.006
+fog_height = 0.0
+fog_height_density = 0.22
+ssao_enabled = true
+ssao_radius = 0.75
+ssao_intensity = 1.35
+
+[sub_resource type="StandardMaterial3D" id="Material_floor"]
+albedo_color = Color(0.075, 0.085, 0.115, 1)
+metallic = 0.45
+roughness = 0.42
+
+[sub_resource type="BoxMesh" id="Mesh_floor"]
+material = SubResource("Material_floor")
+# Extend well past the camera's near-side ground intersection so the arena
+# surface fills the entire frame instead of exposing the environment color.
+size = Vector3(13.2, 0.2, 52.0)
+
+[sub_resource type="StandardMaterial3D" id="Material_backwall"]
+albedo_color = Color(0.025, 0.03, 0.055, 1)
+metallic = 0.2
+roughness = 0.72
+
+[sub_resource type="BoxMesh" id="Mesh_backwall"]
+material = SubResource("Material_backwall")
+size = Vector3(14, 6.5, 0.18)
+
+[sub_resource type="StandardMaterial3D" id="Material_trim_blue"]
+albedo_color = Color(0.03, 0.33, 0.62, 1)
+emission_enabled = true
+emission = Color(0.02, 0.35, 0.9, 1)
+emission_energy_multiplier = 2.4
+roughness = 0.25
+
+[sub_resource type="StandardMaterial3D" id="Material_trim_red"]
+albedo_color = Color(0.62, 0.08, 0.055, 1)
+emission_enabled = true
+emission = Color(1, 0.09, 0.035, 1)
+emission_energy_multiplier = 2.2
+roughness = 0.25
+
+[sub_resource type="BoxMesh" id="Mesh_vertical_trim"]
+size = Vector3(0.055, 4.8, 0.055)
+
+[sub_resource type="BoxMesh" id="Mesh_floor_trim"]
+size = Vector3(0.035, 0.025, 5.4)
+
+[sub_resource type="StandardMaterial3D" id="Material_platform"]
+albedo_color = Color(0.13, 0.14, 0.18, 1)
+metallic = 0.7
+roughness = 0.32
+
+[sub_resource type="CylinderMesh" id="Mesh_platform"]
+material = SubResource("Material_platform")
+top_radius = 9.5
+bottom_radius = 9.7
+height = 0.11
+radial_segments = 48
+
+[sub_resource type="StandardMaterial3D" id="Material_logo"]
+albedo_color = Color(0.65, 0.52, 0.08, 1)
+emission_enabled = true
+emission = Color(0.95, 0.58, 0.04, 1)
+emission_energy_multiplier = 1.7
+
+[sub_resource type="TorusMesh" id="Mesh_logo"]
+material = SubResource("Material_logo")
+inner_radius = 0.72
+outer_radius = 0.82
+rings = 32
+ring_segments = 10
+
+[node name="Arena3D" type="Node3D"]
+script = ExtResource("1_arena")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_arena")
+
+[node name="Camera3D" type="Camera3D" parent="." groups=["camera"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 14)
+projection = 1
+size = 7.2
+near = 0.1
+far = 50.0
+current = true
+
+[node name="KeyLight" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-46, -28, 0)
+light_color = Color(0.64, 0.76, 1, 1)
+light_energy = 1.65
+shadow_enabled = true
+directional_shadow_max_distance = 24.0
+
+[node name="RedRim" type="OmniLight3D" parent="."]
+position = Vector3(-4.8, 2.8, 1.8)
+light_color = Color(1, 0.12, 0.055, 1)
+light_energy = 3.2
+omni_range = 5.5
+
+[node name="BlueRim" type="OmniLight3D" parent="."]
+position = Vector3(4.8, 3.1, 1.5)
+light_color = Color(0.08, 0.35, 1, 1)
+light_energy = 3.5
+omni_range = 5.8
+
+[node name="Stage" type="Node3D" parent="."]
+
+[node name="Floor" type="MeshInstance3D" parent="Stage"]
+position = Vector3(0, -0.1, 0)
+mesh = SubResource("Mesh_floor")
+
+[node name="Platform" type="MeshInstance3D" parent="Stage"]
+# Keep the visible fighting surface flush with the y=0 presentation floor.
+# The previous raised top face hid the fighters' soles even when their roots
+# were correctly grounded.
+position = Vector3(0, -0.055, 0.1)
+mesh = SubResource("Mesh_platform")
+
+[node name="BackWall" type="MeshInstance3D" parent="Stage"]
+position = Vector3(0, 3.05, -2.85)
+mesh = SubResource("Mesh_backwall")
+
+[node name="BluePillar1" type="MeshInstance3D" parent="Stage"]
+position = Vector3(-5.4, 2.6, -2.72)
+mesh = SubResource("Mesh_vertical_trim")
+material_override = SubResource("Material_trim_blue")
+
+[node name="BluePillar2" type="MeshInstance3D" parent="Stage"]
+position = Vector3(-4.0, 2.6, -2.72)
+mesh = SubResource("Mesh_vertical_trim")
+material_override = SubResource("Material_trim_blue")
+
+[node name="RedPillar1" type="MeshInstance3D" parent="Stage"]
+position = Vector3(4.0, 2.6, -2.72)
+mesh = SubResource("Mesh_vertical_trim")
+material_override = SubResource("Material_trim_red")
+
+[node name="RedPillar2" type="MeshInstance3D" parent="Stage"]
+position = Vector3(5.4, 2.6, -2.72)
+mesh = SubResource("Mesh_vertical_trim")
+material_override = SubResource("Material_trim_red")
+
+[node name="FloorLineLeft" type="MeshInstance3D" parent="Stage"]
+position = Vector3(-3.0, 0.025, 0)
+mesh = SubResource("Mesh_floor_trim")
+material_override = SubResource("Material_trim_blue")
+
+[node name="FloorLineRight" type="MeshInstance3D" parent="Stage"]
+position = Vector3(3.0, 0.025, 0)
+mesh = SubResource("Mesh_floor_trim")
+material_override = SubResource("Material_trim_red")
+
+[node name="WallEmblem" type="MeshInstance3D" parent="Stage"]
+position = Vector3(0, 2.75, -2.72)
+rotation_degrees = Vector3(90, 0, 0)
+mesh = SubResource("Mesh_logo")
+
+[node name="Fighters" type="Node3D" parent="."]

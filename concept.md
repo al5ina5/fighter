@@ -1,6 +1,6 @@
 # Untitled Fight Game — Concept Draft v1
 
-> Status: 🧠 Concept — NOT a work item
+> Status: Active design reference; the playable engine now uses 2.5D presentation
 > Owners: Brother (brain/concept) · You (tech / AI prompting)
 > Engine: Godot · Platform: PC (Windows/Mac) · Ship: itch.io
 
@@ -121,19 +121,12 @@ if we want (see Open Questions).
 
 ## Controls & Perspective
 
-**Roadmap split: build it 2D first, go 3D later.**
-
-- **v1:** **2D side-view fighter.** Left/right movement, maybe a small forward/back
-  depth for sidesteps. This is how beginners actually finish a fighting game, and it's
-  where the limb mechanic can be clearly read and felt.
-- **Later:** explore **full 3D arena** (the Soul Calibur dream) once the 2D core is
-  tight and the limb system is proven. Sister always asks: *is the fun already there in 2D?*
-  Yes → THEN spend months on 3D. Don't jump to 3D before the fun exists.
-
-> ⚠️ Trade-off to lock in: earlier you picked "stylized low-poly 3D" art, but chose **2D**
-> gameplay. For a beginner Godot v1, **2D sprite/pixel art** is by far the surest path.
-> Decision, when ready: build 2D art first, and let low-poly 3D be the *later* 3D era
-> art style. (Open Question #2.)
+- **2.5D side-view fighter:** players move, jump, attack, and collide on a single
+  deterministic 2D plane while 3D models and a 3D arena provide the presentation.
+- A locked orthographic side camera preserves readable fighting-game spacing;
+  its slight downward angle exposes stage depth without adding sidestep gameplay.
+- This hybrid keeps the tested limb-combat rules intact while allowing modern
+  rigged and animated characters. See `MODEL_INTEGRATION.md` for the asset contract.
 
 ---
 
@@ -154,9 +147,8 @@ if we want (see Open Questions).
 
 ## Tech & Art Approach (beginner-safe)
 
-- **Engine:** **Godot 4** + **GDScript.** Free, docs-rich, great 2D tooling, exports
-  to PC easily. Zero licensing cost.
-- **Art:** 2D sprites/pixel art for v1 (see trade-off above). Low-poly 3D is the future era.
+- **Engine:** **Godot 4** + **GDScript**, with 2D combat simulation and 3D presentation.
+- **Art:** rigged 3D fighters on a 3D stage, viewed and played as a side-on fighter.
 - **Scope discipline:** this is the most important rule. We finish 4 characters and
   1 tight mechanic well, rather than 10 characters badly.
 
@@ -165,7 +157,7 @@ if we want (see Open Questions).
 ## 🔒 Scope Guardrails — what we are NOT doing in v1
 
 - ❌ Online multiplayer (hardest thing in fighting games — defer entirely).
-- ❌ 3D fighter movement (2D first).
+- ❌ Free-roaming 3D movement; gameplay stays on the fighting plane.
 - ❌ Story mode / cinematic campaigns (maybe v2).
 - ❌ Breakable/interactive arenas (static walls).
 - ❌ More than 4 fighters.
@@ -206,7 +198,7 @@ The brother's pitch is *tactile*. Don't ship until these all feel right:
 1. **Title.** Campy 80s underground + limbs. Starter ideas:
    `DISARMED` · `CIRCUIT` · `Limbless` · `STUMPED` · `Rack & Ruin` · `One-Armed`
    or lean real: `FIGHT CLUB: underground`. (Pick a lane: serious vs comedy.)
-2. **Art era.** Confirm: 2D art for v1, low-poly 3D for the later 3D era. Yes/No.
+2. **Art era.** Resolved: rigged 3D art in a side-on 2.5D game.
 3. **Limb-region naming** head/torso/L/R arm/L/R leg — or something more flavorful?
 4. **Core = torso + head only**, or does losing certain limbs *also* nudge the win
    condition (e.g. head loss = instant round loss)? Ballot needed.
