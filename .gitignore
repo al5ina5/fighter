@@ -1,3 +1,8 @@
 # Godot 4 cache and import files
 .godot/
 *.import
+
+# Animation-only Mixamo FBXs need their centimeter-scale import profile. These
+# sidecars are source metadata, not generated cache, and must travel with clips.
+!assets/models/girlypoppums/animations/*.fbx.import
+!assets/models/robot/animations/*.fbx.import

@@ -48,6 +48,9 @@ of filenames per gameplay semantic; add another filename to an array to cycle
 through multiple idles, hit reactions, or attacks. Fighting Idle is currently
 the only selected `idle`; it plays its full 3.3-second Mixamo loop at 1× speed.
 The older `Idle.fbx` remains available but unused.
+The committed `.fbx.import` files preserve Mixamo's centimeter-scale hips/root
+motion before Godot optimizes tracks. Keep the matching sidecar when replacing
+an FBX; no Blender step is involved.
 
 ## Rebuild
 

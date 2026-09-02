@@ -37,6 +37,14 @@ func _ready() -> void:
 	_expect_true(animation != null, "loose idle clip is available on the player")
 	if animation != null:
 		_expect_near(animation.length, 3.3, 0.02, "the supplied Fighting Idle is the active idle file")
+		_expect_true(
+			_bone_position_key_count(animation, "mixamorig_Hips") >= 100,
+			"Mixamo hips translation keys survive Godot import",
+		)
+		_expect_true(
+			_bone_position_span(animation, "mixamorig_Hips") > 0.03,
+			"Fighting Idle preserves its authored forward/back body movement",
+		)
 		var skeleton_path := visual.animation_player.get_path_to(visual.model_skeleton)
 		var bone_tracks := 0
 		var valid_bone_tracks := 0
@@ -136,6 +144,33 @@ func _bone_position(animation: Animation, bone_name: String, key_index: int) -> 
 		var resolved_index := key_index if key_index >= 0 else count + key_index
 		return animation.track_get_key_value(track, resolved_index) as Vector3
 	return Vector3(INF, INF, INF)
+
+
+func _bone_position_key_count(animation: Animation, bone_name: String) -> int:
+	for track in animation.get_track_count():
+		if animation.track_get_type(track) != Animation.TYPE_POSITION_3D:
+			continue
+		var path := animation.track_get_path(track)
+		if path.get_subname_count() > 0 and str(path.get_subname(0)) == bone_name:
+			return animation.track_get_key_count(track)
+	return 0
+
+
+func _bone_position_span(animation: Animation, bone_name: String) -> float:
+	for track in animation.get_track_count():
+		if animation.track_get_type(track) != Animation.TYPE_POSITION_3D:
+			continue
+		var path := animation.track_get_path(track)
+		if path.get_subname_count() == 0 or str(path.get_subname(0)) != bone_name:
+			continue
+		var low := Vector3(INF, INF, INF)
+		var high := Vector3(-INF, -INF, -INF)
+		for key in animation.track_get_key_count(track):
+			var value: Vector3 = animation.track_get_key_value(track, key)
+			low = low.min(value)
+			high = high.max(value)
+		return low.distance_to(high)
+	return 0.0
 
 
 func _bone_world_y(visual: FighterVisual3D, bone_name: String) -> float:

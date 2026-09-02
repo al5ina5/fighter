@@ -114,6 +114,15 @@ character's live skeleton. Because every Mixamo export shares the canonical
   `res://assets/models/girlypoppums/animations`. Loaded clips override the
   baked animation_map for the same semantic.
 
+Keep each committed `.fbx.import` sidecar beside its FBX when replacing a clip.
+Mixamo animation-only exports use centimeter-scale bone translations. The
+sidecar imports the scene at `100.0` root scale and 60 FPS before Godot reduces
+animation tracks; without it, subtle hips/root keys can collapse into one
+constant key and the feet appear to slide under a stationary body. Replacing an
+existing FBX under the same filename automatically reuses the correct sidecar.
+For a brand-new filename, copy any existing `.fbx.import` sidecar, rename it to
+match, then let Godot reimport it.
+
 ### Multiple clips per semantic
 
 An optional `animations/index.json` maps a semantic to an array of filenames,
