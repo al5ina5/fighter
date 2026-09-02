@@ -47,7 +47,7 @@ func _ready() -> void:
 	player2._start_stance_change()
 	_expect_eq(player2.state, Player.State.STANCE, "stance change has a committed transition state")
 	_expect_eq(player2.stance, 1, "logical stance does not teleport at transition start")
-	player2._apply_stance_visuals(Player.STANCE_TRANSITION_DURATION)
+	player2._apply_stance_visuals(float(Player.STANCE_TRANSITION_FRAMES) / Player.COMBAT_FPS)
 	_expect_eq(player2.current_target_stance(), -1, "target role follows the visibly forward limb during transition")
 	player2._finish_stance_change()
 	_expect_eq(player2.stance, -1, "stance commits after transition")
@@ -61,24 +61,24 @@ func _ready() -> void:
 		"normal leg kick has materially more range than the head punch"
 	)
 	_expect_true(
-		float(Player.ATTACKS.high[true].windup) > float(Player.ATTACKS.low[false].windup),
+		int(Player.ATTACKS.high[true].startup_frames) > int(Player.ATTACKS.low[false].startup_frames),
 		"heavy head kick has more startup than a normal leg kick"
 	)
 	_expect_true(
-		float(Player.ATTACKS.high[true].recovery) > float(Player.ATTACKS.low[false].recovery),
+		int(Player.ATTACKS.high[true].recovery_frames) > int(Player.ATTACKS.low[false].recovery_frames),
 		"heavy head kick has substantially more whiff recovery"
 	)
 	_expect_eq(player1._attacking_limb("high", true), "leg_l", "heavy high uses the rear leg")
 	Input.action_press("p1_block")
 	player1.state = Player.State.ATTACK
 	_expect_true(not player1._is_blocking(), "fighter cannot block during an attack")
-	player1.state = Player.State.HURT
+	player1.state = Player.State.HITSTUN
 	_expect_true(not player1._is_blocking(), "fighter cannot block during hitstun")
 	player1.state = Player.State.IDLE
 	_expect_true(player1._is_blocking(), "idle fighter can block")
 	Input.action_release("p1_block")
 
-	player1.state = Player.State.HURT
+	player1.state = Player.State.HITSTUN
 	Input.action_press("p1_mid")
 	player1._capture_attack_input()
 	Input.action_release("p1_mid")
@@ -157,11 +157,16 @@ func _ready() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	_expect_true(player1.hitbox.overlaps_area(player2._get_limb_hurtbox("head")), "rear-leg head kick reaches head on an even floor")
-	_expect_true(not player1.hitbox.overlaps_area(player2._get_limb_hurtbox("torso")), "head kick contact stays above torso")
+	var kick_head_before := float(player2.limb_hp["head"].hp)
+	var kick_torso_before := float(player2.limb_hp["torso"].hp)
+	player1.hit_landed = false
+	player1._check_hits()
+	_expect_true(float(player2.limb_hp["head"].hp) < kick_head_before, "head kick prioritizes its contacted head hurtbox")
+	_expect_eq(player2.limb_hp["torso"].hp, kick_torso_before, "one strike never damages two overlapping hurtboxes")
 	player1._finish_attack()
 
 	player1.limb_hp["arm_r"].gone = true
-	_expect_eq(player1._attacking_limb("mid", false), "", "normal mid fails without its close arm")
+	_expect_eq(player1._attacking_limb("mid", false), "head", "lost lead arm receives a desperation head strike")
 	_expect_eq(player1._attacking_limb("mid", true), "arm_l", "heavy mid still uses the rear arm")
 
 	var did_die := [false]
@@ -184,8 +189,8 @@ func _ready() -> void:
 	player2.limb_hp["leg_r"].gone = true
 	player2._update_body_collision()
 	var legless_shape := player2.body_shape.shape as RectangleShape2D
-	_expect_eq(legless_shape.size, Vector2(46.0, 40.0), "legless fighter uses a low body collision shape")
-	_expect_eq(player2.body_shape.position, Vector2(0.0, 20.0), "legless collision follows the lowered rig")
+	_expect_eq(legless_shape.size, Vector2(44.0, 38.0), "legless fighter uses a low body collision shape")
+	_expect_eq(player2.body_shape.position, Vector2(0.0, 21.0), "legless collision follows the lowered rig")
 
 	if failures == 0:
 		print("PlayerCombatIntegrationTest: all checks passed")

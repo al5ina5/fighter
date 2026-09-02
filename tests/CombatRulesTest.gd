@@ -1,19 +1,20 @@
-extends SceneTree
+extends Node
 
 var failures := 0
 
 
-func _init() -> void:
+func _ready() -> void:
 	_test_source_limb_selection()
 	_test_pose_tracks_facing_and_stance()
 	_test_target_priorities()
 	_test_destroyed_limb_fallbacks()
+	_test_actual_contact_wins()
 	if failures == 0:
 		print("CombatRulesTest: all checks passed")
-		quit(0)
+		get_tree().quit(0)
 	else:
 		push_error("CombatRulesTest: %d check(s) failed" % failures)
-		quit(1)
+		get_tree().quit(1)
 
 
 func _test_source_limb_selection() -> void:
@@ -56,6 +57,20 @@ func _test_destroyed_limb_fallbacks() -> void:
 	var mid_limbs := _limbs()
 	mid_limbs["arm_r"].gone = true
 	_expect_eq(CombatRules.pick_target("mid", 1, mid_limbs), "torso", "mid advances from close arm to torso")
+
+
+func _test_actual_contact_wins() -> void:
+	var limbs := _limbs()
+	_expect_eq(
+		CombatRules.pick_contact_target("high", 1, limbs, ["torso"]),
+		"torso",
+		"high attack damages the torso it touched instead of a distant preferred head",
+	)
+	_expect_eq(
+		CombatRules.pick_contact_target("low", 1, limbs, ["leg_l", "leg_r"]),
+		"leg_r",
+		"priority only breaks a tie between contacted hurtboxes",
+	)
 
 
 func _limbs() -> Dictionary:

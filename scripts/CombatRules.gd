@@ -73,6 +73,23 @@ static func pick_target(band: String, target_stance: int, target_limbs: Dictiona
 	return ""
 
 
+## Selects only among hurtboxes that were actually touched. Priority is now a
+## tie-breaker instead of a reason to discard valid contact with another limb.
+static func pick_contact_target(
+	band: String,
+	target_stance: int,
+	target_limbs: Dictionary,
+	contacts: Array[String],
+) -> String:
+	for limb_name in target_priority(band, target_stance, target_limbs):
+		if limb_name in contacts and not _is_gone(target_limbs, limb_name):
+			return limb_name
+	for limb_name in ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]:
+		if limb_name in contacts and not _is_gone(target_limbs, limb_name):
+			return limb_name
+	return ""
+
+
 static func pose_x(limb_name: String, stance: int, facing: int) -> float:
 	if not limb_name.contains("_"):
 		return 0.0

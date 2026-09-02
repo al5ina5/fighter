@@ -17,9 +17,14 @@ func _ready() -> void:
 	await _wait_physics_frames(16)
 	await _test_real_pushboxes()
 
-	await _run_move_test("high", false, 198.0, "head", "normal head punch lands through live attack timing")
-	await _run_move_test("low", false, 253.0, "leg_r", "long-range leg kick lands through live attack timing")
-	await _run_move_test("high", true, 198.0, "head", "committed rear-leg head kick lands through live attack timing")
+	# Pushbox contact is the closest legal spacing. Every standing attack must
+	# remain usable there; this is the regression for the old point-blank hole.
+	await _run_move_test("high", false, 150.0, "head", "point-blank normal high lands")
+	await _run_move_test("mid", false, 150.0, "arm_r", "point-blank normal mid lands")
+	await _run_move_test("low", false, 150.0, "leg_r", "point-blank normal low lands")
+	await _run_move_test("high", true, 150.0, "head", "point-blank heavy high lands")
+	await _run_move_test("mid", true, 150.0, "arm_r", "point-blank heavy mid lands")
+	await _run_move_test("low", true, 150.0, "leg_r", "point-blank heavy low lands")
 	await _run_legless_target_test("mid", 188.0, "head", "mid strike reaches the lowered head after both legs are gone")
 	await _run_legless_target_test("low", 286.0, "arm_r", "low strike cycles into the lowered close arm after both legs are gone")
 

@@ -295,12 +295,12 @@ func _sync_animation(force: bool) -> void:
 	if animation_player == null:
 		return
 	var semantic := _current_semantic()
-	var hurt_restarted := (
-		source.state == Player.State.HURT
+	var hurt_restarted: bool = (
+		source.state in [Player.State.HITSTUN, Player.State.KNOCKDOWN]
 		and last_hurt_timer > 0.0
 		and source.hurt_timer > last_hurt_timer + 0.001
 	)
-	last_hurt_timer = source.hurt_timer if source.state == Player.State.HURT else 0.0
+	last_hurt_timer = source.hurt_timer if source.state in [Player.State.HITSTUN, Player.State.KNOCKDOWN] else 0.0
 	if not force and semantic == last_semantic:
 		if hurt_restarted:
 			_play_semantic(semantic)
@@ -323,7 +323,7 @@ func _current_semantic() -> String:
 			var band := str(source.attack.get("band", "mid"))
 			var weight := "heavy" if bool(source.attack.get("heavy", false)) else "normal"
 			return "%s_%s" % [band, weight]
-		Player.State.HURT:
+		Player.State.HITSTUN, Player.State.KNOCKDOWN:
 			return "hit"
 		Player.State.KO:
 			return "knockout"
@@ -361,7 +361,9 @@ func _play_semantic(semantic: String) -> void:
 			else:
 				speed = animation.length / attack_duration
 	animation_player.speed_scale = speed
-	animation_player.play(clip, 0.06)
+	# Attacks need a near-instant transition so the authored startup frames and
+	# the visible wind-up begin together. Locomotion keeps a softer blend.
+	animation_player.play(clip, 0.02 if source.state == Player.State.ATTACK else 0.05)
 
 
 func _retime_attack_after_contact(semantic: String) -> void:
