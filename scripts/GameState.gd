@@ -26,7 +26,7 @@ const SHARED_CONTACT_RATIOS := {
 
 const CHARACTERS := [
 	{
-		"name": "Girlypoppums",
+		"name": "Bellini Valentini",
 		"color": Color(0.96, 0.24, 0.62),
 		"model_path": "res://assets/models/girlypoppums/girlypoppums_prepared.glb",
 		"animations_dir": "res://assets/models/girlypoppums/animations",
