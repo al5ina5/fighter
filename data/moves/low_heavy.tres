@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="FighterMoveData" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat/FighterMoveData.gd" id="1_move"]
+[ext_resource type="Script" path="res://scripts/combat/CombatBoxData.gd" id="2_box"]
+
+[sub_resource type="Resource" id="CombatBox_hit"]
+script = ExtResource("2_box")
+center = Vector2(50, 20)
+size = Vector2(75, 28)
+region = "legs"
+start_frame = 15
+end_frame = 20
+
+[resource]
+script = ExtResource("1_move")
+move_id = "low_heavy"
+band = "low"
+heavy = true
+animation_semantic = "low_heavy"
+chain_rank = 3
+startup_frames = 15
+active_frames = 6
+recovery_frames = 22
+damage = 14.0
+limb_damage = 17.0
+hitstun_frames = 34
+blockstun_frames = 17
+hitstop_frames = 8
+guard_damage = 19.0
+chip_ratio = 0.07
+guard_type = "low"
+knockback = 310.0
+launch = -110.0
+knockdown = true
+startup_travel = 11.0
+active_travel = 8.0
+hitboxes = Array[ExtResource("2_box")]([SubResource("CombatBox_hit")])

@@ -14,8 +14,11 @@ rigged model in the 3D arena.
 - Use meters when practical. Per-character scale and offsets can correct other
   authoring units without touching combat code.
 
-No collision mesh is needed. The engine's 2D hit/hurt boxes remain authoritative
-and keep the fighting game deterministic.
+No collision mesh is needed. Deterministic fighter-space rectangles remain
+authoritative and keep the fighting game independent from render-frame skeleton
+poses. These are pure combat data—not `Area2D` children attached to the legacy
+2D rig. The prepared model's hips are automatically centered over the combat
+root after its configured scale and rotation are applied.
 
 ## Registering a model
 
@@ -73,10 +76,13 @@ The adapter searches case-insensitively and accepts common variations:
 
 `animation_map` explicitly maps gameplay semantics to a model's authored clip
 names, so imported clips do not need to use the preferred names. Attack clips
-are automatically time-scaled to the combat move's windup, active, and recovery
-duration. A character can optionally provide `animation_contact_ratios` (values
-from `0.0` to `1.0`) to align each clip's authored impact frame with gameplay's
-active startup. Missing clips gracefully fall back to idle.
+play continuously at their authored 1× speed. The runtime move copy derives its
+startup from the configured contact ratio, opens the deterministic active
+hitbox at that pose, and uses the rest of the clip as recovery. Hitstop pauses
+and resumes that playback in place without changing its rate. A character can
+optionally provide
+`animation_contact_ratios` (values from `0.0` to `1.0`) to mark the authored
+impact pose. Missing clips gracefully fall back to idle.
 
 ## Detachable limbs
 
@@ -123,6 +129,11 @@ existing FBX under the same filename automatically reuses the correct sidecar.
 For a brand-new filename, copy any existing `.fbx.import` sidecar, rename it to
 match, then let Godot reimport it.
 
+At runtime, the permanent start-to-end hips trajectory is removed from every
+loose clip and recentered on the combat root. Non-linear weight shifts, lunges,
+and follow-through remain visible; gameplay root travel stays authored in
+`FighterMoveData`, so a clip cannot accumulate drift away from its collision.
+
 ### Multiple clips per semantic
 
 An optional `animations/index.json` maps a semantic to an array of filenames,
@@ -140,6 +151,36 @@ The adapter advances deterministically through the array. One-entry looping
 states loop continuously; multi-entry idle/walk/block sets advance when a clip
 finishes. Hit reactions and attacks advance each time the state starts, so
 adding a file plus one manifest entry makes it available in-game.
+
+### Left/right lead mirroring
+
+No duplicate southpaw animation files are required. Every loose clip receives a
+runtime-generated mirrored partner. The generator samples the animation in
+skeleton space at 60 Hz, exchanges canonical `Left`/`Right` Mixamo bone pairs,
+reflects their complete transforms across the hips plane, and writes ordinary
+positive-scale animation tracks. Changing lead blends the character's chest
+through a ±22-degree depth turn and selects the corresponding full-body clip.
+Punches, kicks, idle asymmetry, walking, blocking, hit reactions, and knockouts
+therefore flip together while anatomical limb identity remains unchanged.
+
+### Locomotion direction and physical depth
+
+The combat controller distinguishes advancing from retreating using velocity
+relative to facing. Forward movement plays the supplied walk cycle normally;
+retreating plays the full in-place cycle backward at the same authored 1× rate.
+A future character may replace that fallback with a dedicated authored
+back-walk semantic without changing combat movement.
+
+Fighter models are not assigned per-player rendering lanes. Both presentation
+roots use world Z = 0, and stance yaw plus the imported skeleton animation place
+individual limbs at real depths. Normal 3D depth testing therefore determines
+occlusion when two fighters overlap on screen.
+
+When both leg regions are destroyed, `FighterVisual3D` measures the live hips
+bone after animation and offsets the model root until that bone sits just above
+the floor. The simulation simultaneously switches to its low pelvis pushbox and
+zero locomotion, keeping the visible posture, movement rules, and collision in
+the same state.
 
 ### Robot package status
 

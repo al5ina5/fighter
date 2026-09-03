@@ -37,7 +37,7 @@ FBXs are byte-for-byte copies of the supplied sources. Loading only converts the
 FBX skeleton's units and rest offsets onto the live GLB skeleton; it preserves
 the authored keys, duration, and root motion.
 
-The character profile stores a measured contact point for each of the six attacks. The 3D presentation adapter compresses the supplied clip so that point coincides with the existing attack's active startup, then fits the rest of the clip into its active and recovery time. This changes presentation timing only: the game's existing attacks, limbs, hitboxes, damage, movement, and frame timings remain authoritative.
+The character profile stores a measured contact point for each of the six attacks. Every clip plays at its authored 1× speed. At runtime, a per-fighter move copy derives startup from that contact point, opens its deterministic hitbox there, and assigns the rest of the clip to recovery. The original reusable move resource is never mutated.
 
 The prepared mesh is separated into `head`, `torso`, `arm_l`, `arm_r`, `leg_l`, and `leg_r` skinned surfaces. That preserves the current limb-loss mechanic while every surface continues to animate from the same skeleton and use the supplied texture.
 

@@ -3,9 +3,13 @@ extends RefCounted
 ## Loads loose Mixamo animation FBXs from a character's `animations/` folder and
 ## retargets them onto the character's live skeleton at runtime.
 
+const MIRRORED_SUFFIX := "_mirrored"
+const MIRROR_SAMPLE_FPS := 60.0
+
 const FALLBACK_SEMANTICS := {
 	"idle": ["idle", "fight_idle", "fighting_idle", "combat_idle"],
 	"walk": ["walk", "walk_forward", "walking", "run"],
+	"walk_backward": ["walk_backward", "back_walk", "walking_backward", "retreat"],
 	"jump": ["jump", "jump_start", "airborne"],
 	"block": ["block", "guard", "blocking"],
 	"hit": ["hit", "hit_react", "hurt", "damage"],
@@ -82,6 +86,7 @@ static func load_animations(
 
 	for semantic in semantic_files:
 		var clip_names: Array[StringName] = []
+		var mirrored_clip_names: Array[StringName] = []
 		for filename in semantic_files[semantic]:
 			var clip_name := "%s_%d" % [semantic, clip_names.size()]
 			var animation := _build_animation(
@@ -96,8 +101,17 @@ static func load_animations(
 				library.remove_animation(clip_name)
 			library.add_animation(clip_name, animation)
 			clip_names.append(clip_name)
+			var mirrored := _build_mirrored_animation(animation, skeleton, node_prefix)
+			if mirrored != null:
+				var mirrored_name := clip_name + MIRRORED_SUFFIX
+				if library.has_animation(mirrored_name):
+					library.remove_animation(mirrored_name)
+				library.add_animation(mirrored_name, mirrored)
+				mirrored_clip_names.append(mirrored_name)
 		if clip_names.size() > 0:
 			result[semantic] = clip_names
+		if mirrored_clip_names.size() > 0:
+			result[str(semantic) + MIRRORED_SUFFIX] = mirrored_clip_names
 	return result
 
 
@@ -148,8 +162,7 @@ static func _build_animation(
 				target_skeleton,
 				unit_scale
 			)
-	if semantic == "walk":
-		_remove_linear_hips_drift(target)
+	_anchor_hips_to_combat_root(target, target_skeleton)
 	instance.free()
 	return target
 
@@ -239,7 +252,11 @@ static func _bone_index_by_normalized_name(skeleton: Skeleton3D, bone_name: Stri
 	return -1
 
 
-static func _remove_linear_hips_drift(animation: Animation) -> void:
+## Imported Mixamo clips often include a large hips X/Z offset or baked travel.
+## Gameplay owns fight-plane position, so remove the start-to-end trajectory and
+## recenter it on the target rig. Non-linear weight shifts and lunges remain;
+## only permanent drift away from the pushbox is removed.
+static func _anchor_hips_to_combat_root(animation: Animation, skeleton: Skeleton3D) -> void:
 	for track in range(animation.get_track_count()):
 		if animation.track_get_type(track) != Animation.TYPE_POSITION_3D:
 			continue
@@ -248,24 +265,165 @@ static func _remove_linear_hips_drift(animation: Animation) -> void:
 			continue
 		if not _normalize(str(path.get_subname(0))).ends_with("hips"):
 			continue
-		var key_count := animation.track_get_key_count(track)
-		if key_count < 2:
+		var bone_index := _bone_index_by_normalized_name(skeleton, path.get_subname(0))
+		if bone_index < 0:
 			continue
+		var key_count := animation.track_get_key_count(track)
+		if key_count == 0:
+			continue
+		var rest_position := skeleton.get_bone_rest(bone_index).origin
 		var first_time := animation.track_get_key_time(track, 0)
 		var last_time := animation.track_get_key_time(track, key_count - 1)
-		var duration := last_time - first_time
-		if duration <= 0.0:
-			continue
-		var first_value: Variant = animation.track_get_key_value(track, 0)
-		var last_value: Variant = animation.track_get_key_value(track, key_count - 1)
-		if not first_value is Vector3 or not last_value is Vector3:
-			continue
-		var drift: Vector3 = last_value - first_value
+		var duration := maxf(last_time - first_time, 0.0001)
+		var first_value := animation.track_get_key_value(track, 0) as Vector3
+		var last_value := animation.track_get_key_value(track, key_count - 1) as Vector3
 		for key in key_count:
-			var time := animation.track_get_key_time(track, key)
-			var progress := (time - first_time) / duration
-			var value: Vector3 = animation.track_get_key_value(track, key)
-			animation.track_set_key_value(track, key, value - drift * progress)
+			var value: Variant = animation.track_get_key_value(track, key)
+			if value is Vector3:
+				var anchored := value as Vector3
+				var progress := (animation.track_get_key_time(track, key) - first_time) / duration
+				var trajectory := first_value.lerp(last_value, progress)
+				anchored.x = rest_position.x + anchored.x - trajectory.x
+				anchored.z = rest_position.z + anchored.z - trajectory.z
+				animation.track_set_key_value(track, key, anchored)
+
+
+## Build a true sagittal mirror without applying a negative transform to the
+## rendered model. Poses are sampled in skeleton space, left/right bone pairs
+## exchange roles, and the reflected global poses are converted back to local
+## bone tracks. This works across differing left/right rest-bone orientations.
+static func _build_mirrored_animation(
+	source: Animation,
+	skeleton: Skeleton3D,
+	node_prefix: String,
+) -> Animation:
+	if source == null or skeleton == null:
+		return null
+	var bone_count := skeleton.get_bone_count()
+	var source_tracks := _bone_transform_tracks(source, skeleton)
+	var partner_indices := PackedInt32Array()
+	partner_indices.resize(bone_count)
+	for bone_index in bone_count:
+		partner_indices[bone_index] = _mirror_partner_index(skeleton, bone_index)
+
+	var mirrored := Animation.new()
+	mirrored.length = source.length
+	mirrored.loop_mode = source.loop_mode
+	mirrored.step = 1.0 / MIRROR_SAMPLE_FPS
+	var output_tracks: Array[Dictionary] = []
+	for bone_index in bone_count:
+		var bone_name := skeleton.get_bone_name(bone_index)
+		var path := NodePath(node_prefix + ":" + str(bone_name))
+		var position_track := mirrored.add_track(Animation.TYPE_POSITION_3D)
+		mirrored.track_set_path(position_track, path)
+		mirrored.track_set_interpolation_type(position_track, Animation.INTERPOLATION_LINEAR)
+		var rotation_track := mirrored.add_track(Animation.TYPE_ROTATION_3D)
+		mirrored.track_set_path(rotation_track, path)
+		mirrored.track_set_interpolation_type(rotation_track, Animation.INTERPOLATION_LINEAR)
+		var scale_track := mirrored.add_track(Animation.TYPE_SCALE_3D)
+		mirrored.track_set_path(scale_track, path)
+		mirrored.track_set_interpolation_type(scale_track, Animation.INTERPOLATION_LINEAR)
+		output_tracks.append({
+			"position": position_track,
+			"rotation": rotation_track,
+			"scale": scale_track,
+		})
+
+	var hips_index := skeleton.find_bone("mixamorig_Hips")
+	var mirror_plane_x := skeleton.get_bone_global_rest(hips_index).origin.x if hips_index >= 0 else 0.0
+	var frame_count := maxi(1, ceili(source.length * MIRROR_SAMPLE_FPS))
+	for frame in range(frame_count + 1):
+		var time := minf(float(frame) / MIRROR_SAMPLE_FPS, source.length)
+		var source_globals: Array[Transform3D] = []
+		source_globals.resize(bone_count)
+		for bone_index in bone_count:
+			var local_pose := _sample_local_bone_pose(source, source_tracks, skeleton, bone_index, time)
+			var parent := skeleton.get_bone_parent(bone_index)
+			source_globals[bone_index] = source_globals[parent] * local_pose if parent >= 0 else local_pose
+
+		var mirrored_globals: Array[Transform3D] = []
+		mirrored_globals.resize(bone_count)
+		for bone_index in bone_count:
+			var partner := partner_indices[bone_index]
+			mirrored_globals[bone_index] = _reflect_skeleton_transform(source_globals[partner], mirror_plane_x)
+
+		for bone_index in bone_count:
+			var parent := skeleton.get_bone_parent(bone_index)
+			var local_pose := (
+				mirrored_globals[parent].affine_inverse() * mirrored_globals[bone_index]
+				if parent >= 0
+				else mirrored_globals[bone_index]
+			)
+			var local_scale := local_pose.basis.get_scale()
+			var local_rotation := local_pose.basis.orthonormalized().get_rotation_quaternion()
+			var tracks: Dictionary = output_tracks[bone_index]
+			mirrored.position_track_insert_key(int(tracks.position), time, local_pose.origin)
+			mirrored.rotation_track_insert_key(int(tracks.rotation), time, local_rotation)
+			mirrored.scale_track_insert_key(int(tracks.scale), time, local_scale)
+	return mirrored
+
+
+static func _bone_transform_tracks(animation: Animation, skeleton: Skeleton3D) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	result.resize(skeleton.get_bone_count())
+	for bone_index in skeleton.get_bone_count():
+		result[bone_index] = {"position": -1, "rotation": -1, "scale": -1}
+	for track in animation.get_track_count():
+		var type := animation.track_get_type(track)
+		if type not in [Animation.TYPE_POSITION_3D, Animation.TYPE_ROTATION_3D, Animation.TYPE_SCALE_3D]:
+			continue
+		var path := animation.track_get_path(track)
+		if path.get_subname_count() == 0:
+			continue
+		var bone_index := _bone_index_by_normalized_name(skeleton, path.get_subname(0))
+		if bone_index < 0:
+			continue
+		if type == Animation.TYPE_POSITION_3D:
+			result[bone_index].position = track
+		elif type == Animation.TYPE_ROTATION_3D:
+			result[bone_index].rotation = track
+		else:
+			result[bone_index].scale = track
+	return result
+
+
+static func _sample_local_bone_pose(
+	animation: Animation,
+	tracks: Array[Dictionary],
+	skeleton: Skeleton3D,
+	bone_index: int,
+	time: float,
+) -> Transform3D:
+	var rest := skeleton.get_bone_rest(bone_index)
+	var bone_tracks: Dictionary = tracks[bone_index]
+	var position := rest.origin
+	var rotation := rest.basis.orthonormalized().get_rotation_quaternion()
+	var scale := rest.basis.get_scale()
+	if int(bone_tracks.position) >= 0:
+		position = animation.position_track_interpolate(int(bone_tracks.position), time)
+	if int(bone_tracks.rotation) >= 0:
+		rotation = animation.rotation_track_interpolate(int(bone_tracks.rotation), time)
+	if int(bone_tracks.scale) >= 0:
+		scale = animation.scale_track_interpolate(int(bone_tracks.scale), time)
+	return Transform3D(Basis(rotation).scaled(scale), position)
+
+
+static func _mirror_partner_index(skeleton: Skeleton3D, bone_index: int) -> int:
+	var bone_name := str(skeleton.get_bone_name(bone_index))
+	var partner_name := bone_name
+	if bone_name.contains("Left"):
+		partner_name = bone_name.replace("Left", "Right")
+	elif bone_name.contains("Right"):
+		partner_name = bone_name.replace("Right", "Left")
+	var partner := skeleton.find_bone(partner_name)
+	return partner if partner >= 0 else bone_index
+
+
+static func _reflect_skeleton_transform(transform: Transform3D, plane_x: float) -> Transform3D:
+	var reflection := Basis.from_scale(Vector3(-1.0, 1.0, 1.0))
+	var origin := reflection * transform.origin
+	origin.x += plane_x * 2.0
+	return Transform3D(reflection * transform.basis * reflection, origin)
 
 
 static func _skeleton_track_prefix(player: AnimationPlayer, skeleton: Skeleton3D) -> String:

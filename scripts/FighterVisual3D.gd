@@ -4,15 +4,20 @@ class_name FighterVisual3D
 ## rigged 3D fighter. Gameplay never depends on a model's skeleton or clips.
 
 const PIXELS_PER_METER := 100.0
-const SCREEN_CENTER_X := 640.0
 const FLOOR_Y := 560.0
 const STANDING_FOOT_OFFSET := 120.0
-const LOOPING_STATES := ["idle", "walk", "block"]
+const STANCE_YAW_RADIANS := deg_to_rad(22.0)
+const STANCE_MARKER_DEPTH := 0.16
+const BACKWARD_WALK_SPEED := 1.0
+const LEGLESS_HIP_CLEARANCE := 0.08
+const FALLBACK_HIP_HEIGHT := 1.15
+const LOOPING_STATES := ["idle", "walk", "walk_backward", "block"]
 const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
 
 const ANIMATION_ALIASES := {
 	"idle": ["idle", "fight_idle", "fighting_idle", "combat_idle"],
 	"walk": ["walk", "walk_forward", "walking", "run"],
+	"walk_backward": ["walk_backward", "back_walk", "walking_backward", "retreat"],
 	"jump": ["jump", "jump_start", "airborne"],
 	"block": ["block", "guard", "blocking"],
 	"hit": ["hit", "hit_react", "hurt", "damage"],
@@ -77,6 +82,7 @@ func _build_presentation() -> void:
 		_configure_external_model()
 	_index_model(model_root)
 	model_skeleton = _find_skeleton(model_root)
+	_center_model_on_combat_root()
 	animation_player = _find_animation_player(model_root)
 	if animation_player == null and model_skeleton != null:
 		animation_player = AnimationPlayer.new()
@@ -84,6 +90,7 @@ func _build_presentation() -> void:
 		animation_player.root_node = NodePath("..")
 		model_root.add_child(animation_player)
 	_load_loose_animations()
+	_configure_source_attack_timings()
 	_configure_animation_loops()
 	last_semantic = ""
 	set_process(true)
@@ -154,17 +161,30 @@ func _configure_external_model() -> void:
 	model_root.rotation.y = deg_to_rad(rotation_degrees)
 
 
+func _center_model_on_combat_root() -> void:
+	if model_skeleton == null or model_root == null:
+		return
+	var hips_index := model_skeleton.find_bone("mixamorig_Hips")
+	if hips_index < 0:
+		return
+	var hips_world := model_skeleton.to_global(model_skeleton.get_bone_rest(hips_index).origin)
+	var hips_in_fighter_space := to_local(hips_world)
+	model_root.position.x -= hips_in_fighter_space.x
+	model_root.position.z -= hips_in_fighter_space.z
+
+
 func _configure_animation_loops() -> void:
 	if animation_player == null:
 		return
 	for semantic in LOOPING_STATES:
-		var clips := _clips_for_semantic(semantic)
-		for clip in clips:
-			var animation := animation_player.get_animation(clip)
-			if animation != null:
-				# A single locomotion/idle clip loops normally. A set advances to
-				# its next member whenever the current variation finishes.
-				animation.loop_mode = Animation.LOOP_LINEAR if clips.size() == 1 else Animation.LOOP_NONE
+		for animation_key in [semantic, semantic + FighterAnimationSet.MIRRORED_SUFFIX]:
+			var clips := _clips_for_semantic(animation_key)
+			for clip in clips:
+				var animation := animation_player.get_animation(clip)
+				if animation != null:
+					# A single locomotion/idle clip loops normally. A set advances to
+					# its next member whenever the current variation finishes.
+					animation.loop_mode = Animation.LOOP_LINEAR if clips.size() == 1 else Animation.LOOP_NONE
 
 
 func _build_fallback_model() -> void:
@@ -244,13 +264,26 @@ func set_hitstop_paused(paused: bool) -> void:
 func _sync_presentation(force_animation: bool) -> void:
 	# The 2D physics body stays on a single plane. Only its presentation is
 	# converted into meters for the 3D world.
-	position.x = (source.global_position.x - SCREEN_CENTER_X) / PIXELS_PER_METER
-	position.y = (FLOOR_Y - source.global_position.y - STANDING_FOOT_OFFSET) / PIXELS_PER_METER
-	position.z = 0.12 if source.player_number == 1 else -0.12
+	var viewport_size := get_viewport().get_visible_rect().size
+	var arena_camera := get_viewport().get_camera_3d()
+	var pixels_per_meter := PIXELS_PER_METER
+	if arena_camera != null and arena_camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
+		pixels_per_meter = viewport_size.y / arena_camera.size
+	var screen_center_x := viewport_size.x * 0.5
+	position.x = (source.global_position.x - screen_center_x) / pixels_per_meter
+	position.y = (FLOOR_Y - source.global_position.y - STANDING_FOOT_OFFSET) / pixels_per_meter
+	# Both fighters occupy the same world-depth plane. The depth buffer now
+	# resolves hands, feet, and torsos from their animated 3D positions instead
+	# of painting one entire player in front based on player number.
+	position.z = 0.0
 
 	var authored_facing := int(profile.get("model_facing", 1))
 	facing_pivot.rotation.y = 0.0 if source.facing == authored_facing else PI
+	var stance_value := _presentation_stance_value()
+	pose_pivot.rotation.y = STANCE_YAW_RADIANS * stance_value
 	pose_pivot.rotation.z = -source.rig.rotation * float(source.facing)
+	pose_pivot.position.y = _legless_pose_offset_y()
+	stance_marker.position.z = STANCE_MARKER_DEPTH * stance_value
 	flash_light.visible = source.flash_timer > 0.0
 
 	if using_fallback:
@@ -267,7 +300,9 @@ func _sync_fallback_pose() -> void:
 			continue
 		var limb_2d := source._get_limb_node(slot)
 		var local_x := (rig_position.x + limb_2d.position.x) * source.scale.x / PIXELS_PER_METER
-		var local_y := (STANDING_FOOT_OFFSET - (rig_position.y + limb_2d.position.y) * source.scale.y) / PIXELS_PER_METER
+		# PosePivot owns the pelvis drop. Keeping the legacy rig's Y offset out of
+		# individual limbs prevents a second, presentation-only displacement.
+		var local_y := (STANDING_FOOT_OFFSET - limb_2d.position.y * source.scale.y) / PIXELS_PER_METER
 		part.position = Vector3(local_x * float(source.facing), local_y, 0.0)
 		part.rotation.z = -limb_2d.rotation * float(source.facing)
 		part.scale = Vector3(1.0, limb_2d.scale.y, 1.0)
@@ -295,24 +330,23 @@ func _sync_animation(force: bool) -> void:
 	if animation_player == null:
 		return
 	var semantic := _current_semantic()
+	var playback_key := _playback_state_key(semantic)
 	var hurt_restarted: bool = (
 		source.state in [Player.State.HITSTUN, Player.State.KNOCKDOWN]
 		and last_hurt_timer > 0.0
 		and source.hurt_timer > last_hurt_timer + 0.001
 	)
 	last_hurt_timer = source.hurt_timer if source.state in [Player.State.HITSTUN, Player.State.KNOCKDOWN] else 0.0
-	if not force and semantic == last_semantic:
+	if not force and playback_key == last_semantic:
 		if hurt_restarted:
 			_play_semantic(semantic)
 			return
 		if source.state == Player.State.ATTACK and source.attack_phase != last_attack_phase:
 			last_attack_phase = source.attack_phase
-			if last_attack_phase == "active":
-				_retime_attack_after_contact(semantic)
 		if semantic in LOOPING_STATES and not animation_player.is_playing():
 			_play_semantic(semantic)
 		return
-	last_semantic = semantic
+	last_semantic = playback_key
 	last_attack_phase = source.attack_phase if source.state == Player.State.ATTACK else ""
 	_play_semantic(semantic)
 
@@ -332,54 +366,45 @@ func _current_semantic() -> String:
 	if source._is_blocking():
 		return "block"
 	if absf(source.velocity.x) > 5.0:
-		return "walk"
+		return "walk_backward" if _is_moving_backward() else "walk"
 	return "idle"
 
 
 func _play_semantic(semantic: String) -> void:
 	var resolved_semantic := semantic
-	var clip := _choose_clip_for_semantic(semantic)
+	var animation_key := _stance_animation_key(semantic)
+	var clip := _choose_clip_for_semantic(animation_key)
+	if clip == StringName() and animation_key != semantic:
+		clip = _choose_clip_for_semantic(semantic)
+	var reversing_forward_walk := false
+	if clip == StringName() and semantic == "walk_backward":
+		# Characters can opt into a dedicated retreat clip. Until one is supplied,
+		# reuse the complete forward cycle with reversed playback.
+		resolved_semantic = "walk"
+		animation_key = _stance_animation_key("walk")
+		clip = _choose_clip_for_semantic(animation_key)
+		if clip == StringName() and animation_key != "walk":
+			clip = _choose_clip_for_semantic("walk")
+		reversing_forward_walk = clip != StringName()
 	if clip == StringName():
 		if semantic != "idle":
 			resolved_semantic = "idle"
-			clip = _choose_clip_for_semantic("idle")
+			animation_key = _stance_animation_key("idle")
+			clip = _choose_clip_for_semantic(animation_key)
+			if clip == StringName() and animation_key != "idle":
+				clip = _choose_clip_for_semantic("idle")
 		if clip == StringName():
 			return
 	var speed := 1.0
-	if source.state == Player.State.ATTACK and resolved_semantic == semantic:
-		var animation := animation_player.get_animation(clip)
-		var attack_duration: float = (
-			float(source.attack.get("windup", 0.0))
-			+ float(source.attack.get("active", 0.0))
-			+ float(source.attack.get("recovery", 0.0))
-		)
-		if animation != null and attack_duration > 0.0:
-			var contact_ratio := _attack_contact_ratio(semantic)
-			var windup := float(source.attack.get("windup", 0.0))
-			if contact_ratio > 0.0 and windup > 0.0:
-				speed = animation.length * contact_ratio / windup
-			else:
-				speed = animation.length / attack_duration
+	var play_from_end := false
+	if reversing_forward_walk:
+		# The supplied package has one locomotion cycle. Playing that complete
+		# cycle in reverse gives retreating feet the correct planted direction;
+		# a dedicated back-walk clip can replace this through the semantic map.
+		speed = -BACKWARD_WALK_SPEED
+		play_from_end = true
 	animation_player.speed_scale = speed
-	# Attacks need a near-instant transition so the authored startup frames and
-	# the visible wind-up begin together. Locomotion keeps a softer blend.
-	animation_player.play(clip, 0.02 if source.state == Player.State.ATTACK else 0.05)
-
-
-func _retime_attack_after_contact(semantic: String) -> void:
-	var contact_ratio := _attack_contact_ratio(semantic)
-	if contact_ratio <= 0.0:
-		return
-	var clip := _active_clip_for_semantic(semantic)
-	if clip == StringName():
-		return
-	var animation := animation_player.get_animation(clip)
-	var remaining_game_time := (
-		float(source.attack.get("active", 0.0))
-		+ float(source.attack.get("recovery", 0.0))
-	)
-	if animation != null and remaining_game_time > 0.0:
-		animation_player.speed_scale = animation.length * (1.0 - contact_ratio) / remaining_game_time
+	animation_player.play(clip, 0.02 if source.state == Player.State.ATTACK else 0.05, 1.0, play_from_end)
 
 
 func _attack_contact_ratio(semantic: String) -> float:
@@ -402,12 +427,42 @@ func _choose_clip_for_semantic(semantic: String) -> StringName:
 	return clip
 
 
-func _active_clip_for_semantic(semantic: String) -> StringName:
-	var clips := _clips_for_semantic(semantic)
-	var current := animation_player.current_animation
-	if current in clips:
-		return current
-	return clips[0] if not clips.is_empty() else StringName()
+func _stance_animation_key(semantic: String) -> String:
+	if source != null and source.stance < 0:
+		return semantic + FighterAnimationSet.MIRRORED_SUFFIX
+	return semantic
+
+
+func _playback_state_key(semantic: String) -> String:
+	return _stance_animation_key(semantic)
+
+
+func _is_moving_backward() -> bool:
+	return source != null and source.velocity.x * float(source.facing) < -5.0
+
+
+func _legless_pose_offset_y() -> float:
+	if source == null or not source._is_legless():
+		return 0.0
+	if model_skeleton == null:
+		return -FALLBACK_HIP_HEIGHT
+	var hips_index := model_skeleton.find_bone("mixamorig_Hips")
+	if hips_index < 0:
+		return -FALLBACK_HIP_HEIGHT
+	var hips_world := model_skeleton.to_global(model_skeleton.get_bone_global_pose(hips_index).origin)
+	var hips_in_pose_space := pose_pivot.to_local(hips_world)
+	return LEGLESS_HIP_CLEARANCE - hips_in_pose_space.y
+
+
+func _presentation_stance_value() -> float:
+	if source == null:
+		return 1.0
+	if source.state != Player.State.STANCE:
+		return float(source.stance)
+	var progress := 1.0 - float(source.stance_frames_left) / float(Player.STANCE_TRANSITION_FRAMES)
+	progress = clampf(progress, 0.0, 1.0)
+	var eased := progress * progress * (3.0 - 2.0 * progress)
+	return lerpf(float(source.stance), float(source.pending_stance), eased)
 
 
 func _clips_for_semantic(semantic: String) -> Array[StringName]:
@@ -516,3 +571,16 @@ func _load_loose_animations() -> void:
 		configured_sets,
 	)
 	animation_sets = loaded
+
+
+func _configure_source_attack_timings() -> void:
+	if source == null or animation_player == null:
+		return
+	for semantic in ["high_normal", "high_heavy", "mid_normal", "mid_heavy", "low_normal", "low_heavy"]:
+		var clip := _find_clip_for_semantic(semantic)
+		if clip == StringName():
+			continue
+		var animation := animation_player.get_animation(clip)
+		if animation == null or animation.length <= 0.0:
+			continue
+		source.configure_animation_timing(semantic, animation.length, _attack_contact_ratio(semantic))

@@ -69,20 +69,34 @@ func _ready() -> void:
 	var mid_clip := visual._find_clip_for_semantic("mid_normal")
 	var mid_animation := visual.animation_player.get_animation(mid_clip)
 	var contact_ratio := float(visual.profile.animation_contact_ratios.mid_normal)
+	var startup_time := float(player.active_move.startup_frames) / Player.COMBAT_FPS
+	var remaining_time := float(player.active_move.active_frames + player.active_move.recovery_frames) / Player.COMBAT_FPS
+	_expect_true(visual.animation_player.is_playing(), "combat clip plays continuously instead of stepping between poses")
+	_expect_near(visual.animation_player.current_animation_position, 0.0, 0.001, "attack begins at the first authored frame")
 	_expect_near(
 		visual.animation_player.speed_scale,
-		mid_animation.length * contact_ratio / float(attack_data.windup),
+		1.0,
 		0.001,
-		"attack anticipation reaches the visual contact frame at active startup",
+		"attack startup plays at the source clip's authored speed",
 	)
+	visual.animation_player.advance(startup_time)
+	_expect_near(
+		visual.animation_player.current_animation_position,
+		mid_animation.length * contact_ratio,
+		1.0 / Player.COMBAT_FPS,
+		"startup visibly reaches the authored contact pose",
+	)
+	player.attack_frame = int(attack_data.startup_frames)
 	player.attack_phase = "active"
 	visual._sync_presentation(false)
 	_expect_near(
 		visual.animation_player.speed_scale,
-		mid_animation.length * (1.0 - contact_ratio) / (float(attack_data.active) + float(attack_data.recovery)),
+		1.0,
 		0.001,
-		"post-contact animation fills active and recovery time",
+		"active and recovery keep the same authored playback speed",
 	)
+	visual.animation_player.advance(remaining_time)
+	_expect_near(visual.animation_player.current_animation_position, mid_animation.length, 0.001, "attack reaches its final authored frame")
 	player._finish_attack()
 	visual._sync_presentation(true)
 

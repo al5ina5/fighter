@@ -24,6 +24,7 @@ func _ready() -> void:
 	_expect_true(not visual.using_fallback, "robot loads its prepared GLB")
 	_expect_true(visual.model_skeleton != null, "robot exposes a live skeleton")
 	_expect_true(visual.animation_player != null, "robot exposes an animation player")
+	_expect_eq(player.standing_pushbox_width, 88.0, "robot receives its broad torso pushbox profile")
 	if visual.model_skeleton != null:
 		_expect_eq(visual.model_skeleton.get_bone_count(), 33, "robot uses the canonical Mixamo skeleton")
 	if visual.animation_player != null:
