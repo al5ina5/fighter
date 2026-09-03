@@ -139,6 +139,7 @@ func _physics_process(_delta: float) -> void:
 
 
 func _process(_delta: float) -> void:
+	_resolve_fighter_spacing()
 	if Input.is_action_just_pressed("ui_cancel") or _start_just_pressed():
 		_toggle_start_menu()
 		return
@@ -149,6 +150,30 @@ func _process(_delta: float) -> void:
 		elif rematch_input_armed:
 			rematch_input_armed = false
 			_reset_match()
+
+
+## CharacterBody2D collisions remain useful against the stage, but two moving
+## character bodies can retain a small overlap depending on processing order.
+## This deterministic post-step solver guarantees grounded pushboxes never
+## overlap or cross, including when both players walk forward simultaneously.
+func _resolve_fighter_spacing() -> void:
+	if player1 == null or player2 == null:
+		return
+	if not player1.is_on_floor() or not player2.is_on_floor():
+		return
+	var left := player1 if player1.global_position.x <= player2.global_position.x else player2
+	var right := player2 if left == player1 else player1
+	var minimum_distance := left.pushbox_half_width() + right.pushbox_half_width()
+	var current_distance := right.global_position.x - left.global_position.x
+	if current_distance >= minimum_distance:
+		return
+	var correction := (minimum_distance - current_distance) * 0.5
+	left.global_position.x -= correction
+	right.global_position.x += correction
+	if left.velocity.x > 0.0:
+		left.velocity.x = 0.0
+	if right.velocity.x < 0.0:
+		right.velocity.x = 0.0
 
 
 func _start_just_pressed() -> bool:
@@ -403,19 +428,27 @@ func _update_limb_bars(store: Dictionary, player: Player) -> void:
 
 
 func _spawn_players() -> void:
+	var p1_profile: Dictionary = GameState.p1_char()
 	var p1 := PLAYER_TS.instantiate() as Player
 	p1.player_number = 1
-	p1.body_color = GameState.p1_char().color
+	p1.body_color = p1_profile.color
 	p1.show_debug_rig = false
-	p1.name = GameState.p1_char().name
+	p1.name = p1_profile.name
+	p1.standing_pushbox_width = float(p1_profile.get("standing_pushbox_width", 34.0))
+	p1.airborne_pushbox_width = float(p1_profile.get("airborne_pushbox_width", 30.0))
+	p1.legless_pushbox_width = float(p1_profile.get("legless_pushbox_width", 30.0))
 	p1.position = START_POSITIONS[0]
 	add_child(p1)
 
+	var p2_profile: Dictionary = GameState.p2_char()
 	var p2 := PLAYER_TS.instantiate() as Player
 	p2.player_number = 2
-	p2.body_color = GameState.p2_char().color
+	p2.body_color = p2_profile.color
 	p2.show_debug_rig = false
-	p2.name = GameState.p2_char().name
+	p2.name = p2_profile.name
+	p2.standing_pushbox_width = float(p2_profile.get("standing_pushbox_width", 34.0))
+	p2.airborne_pushbox_width = float(p2_profile.get("airborne_pushbox_width", 30.0))
+	p2.legless_pushbox_width = float(p2_profile.get("legless_pushbox_width", 30.0))
 	p2.position = START_POSITIONS[1]
 	add_child(p2)
 

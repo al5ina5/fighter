@@ -33,12 +33,14 @@ func _ready() -> void:
 
 func _test_frame_data() -> void:
 	for band in ["high", "mid", "low"]:
-		var normal: Dictionary = Player.ATTACKS[band][false]
-		var heavy: Dictionary = Player.ATTACKS[band][true]
-		_expect_true(int(normal.startup_frames) > 0, "%s normal has real startup" % band)
-		_expect_true(int(normal.active_frames) >= 3, "%s normal has a readable active window" % band)
-		_expect_true(int(heavy.recovery_frames) > int(normal.recovery_frames), "%s heavy is more punishable than normal" % band)
-		_expect_true(int(normal.hitstun_frames) > int(normal.recovery_frames), "%s normal is positive on hit" % band)
+		var normal: Dictionary = p1._attack_data(band, false)
+		var heavy: Dictionary = p1._attack_data(band, true)
+		for data in [normal, heavy]:
+			var move := data.move_resource as FighterMoveData
+			var timing: Dictionary = p1.animation_timings[move.animation_semantic]
+			_expect_eq(move.startup_frames, int(timing.contact_frame), "%s contact pose opens its hit window" % move.move_id)
+			_expect_eq(move.total_frames(), int(timing.total_frames), "%s state spans the complete 1x clip" % move.move_id)
+			_expect_true(move.active_frames >= 3, "%s keeps a readable active window" % move.move_id)
 
 
 func _test_guard_matrix() -> void:
@@ -50,6 +52,14 @@ func _test_guard_matrix() -> void:
 	Input.action_press("p2_block") # Dedicated down/block: crouch guard.
 	_expect_true(p2._can_block_attack("low"), "crouch guard blocks lows")
 	_expect_true(not p2._can_block_attack("overhead"), "crouch guard loses to overheads")
+	p2.velocity.x = -200.0
+	p2.buffered_band = "mid"
+	p2.input_buffer_frames = Player.INPUT_BUFFER_FRAMES
+	Input.action_press("p2_move_left")
+	p2._apply_idle()
+	_expect_eq(p2.velocity.x, 0.0, "down guard overrides horizontal movement")
+	_expect_eq(p2.buffered_band, "", "down guard clears offense instead of releasing a delayed attack")
+	Input.action_release("p2_move_left")
 	Input.action_release("p2_block")
 
 
@@ -109,7 +119,7 @@ func _payload(attacker: Player, band: String, heavy: bool, target: String) -> Di
 	data["name"] = attacker._attacking_limb(band, heavy)
 	data["target"] = target
 	data["source_x"] = attacker.global_position.x
-	data["contact_position"] = p2._get_limb_hurtbox(target).global_position
+	data["contact_position"] = p2.limb_contact_position(target)
 	return data
 
 

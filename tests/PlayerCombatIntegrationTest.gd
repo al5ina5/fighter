@@ -44,11 +44,15 @@ func _ready() -> void:
 	)
 	player2.stance = 1
 	player2._snap_stance_visuals()
+	var torso_rect_before := player2._limb_hurt_rect("torso")
+	player2.rig.position = Vector2(300, -200)
+	_expect_eq(player2._limb_hurt_rect("torso"), torso_rect_before, "combat hurtboxes do not follow the hidden fallback rig")
+	player2.rig.position = Vector2.ZERO
 	player2._start_stance_change()
 	_expect_eq(player2.state, Player.State.STANCE, "stance change has a committed transition state")
 	_expect_eq(player2.stance, 1, "logical stance does not teleport at transition start")
 	player2._apply_stance_visuals(float(Player.STANCE_TRANSITION_FRAMES) / Player.COMBAT_FPS)
-	_expect_eq(player2.current_target_stance(), -1, "target role follows the visibly forward limb during transition")
+	_expect_eq(player2.current_target_stance(), 1, "combat stance remains stable until the transition commits")
 	player2._finish_stance_change()
 	_expect_eq(player2.stance, -1, "stance commits after transition")
 	player2.stance = 1
@@ -60,14 +64,8 @@ func _ready() -> void:
 		player1.estimated_attack_reach("low", false) > player1.estimated_attack_reach("high", false) + 40.0,
 		"normal leg kick has materially more range than the head punch"
 	)
-	_expect_true(
-		int(Player.ATTACKS.high[true].startup_frames) > int(Player.ATTACKS.low[false].startup_frames),
-		"heavy head kick has more startup than a normal leg kick"
-	)
-	_expect_true(
-		int(Player.ATTACKS.high[true].recovery_frames) > int(Player.ATTACKS.low[false].recovery_frames),
-		"heavy head kick has substantially more whiff recovery"
-	)
+	var high_heavy_move := player1._attack_data("high", true).move_resource as FighterMoveData
+	_expect_eq(high_heavy_move.active_frames, 5, "heavy head kick preserves its authored active window")
 	_expect_eq(player1._attacking_limb("high", true), "leg_l", "heavy high uses the rear leg")
 	Input.action_press("p1_block")
 	player1.state = Player.State.ATTACK
@@ -89,17 +87,17 @@ func _ready() -> void:
 	player1._finish_attack()
 
 	var pause_data := player1._attack_data("mid", false)
+	_expect_true(pause_data.move_resource is FighterMoveData, "attacks load typed move resources")
 	pause_data["name"] = player1._attacking_limb("mid", false)
 	player1._start_attack(pause_data)
-	var paused_limb := player1._get_limb_node(pause_data.name)
-	await get_tree().process_frame
+	await get_tree().physics_frame
 	Effects.hitstop(0.10)
-	var rotation_before_pause := paused_limb.rotation
+	var frame_before_pause := player1.attack_frame
 	for _i in 3:
-		await get_tree().process_frame
+		await get_tree().physics_frame
 	_expect_true(
-		is_equal_approx(paused_limb.rotation, rotation_before_pause),
-		"hitstop pauses the strike animation tween (%.4f -> %.4f)" % [rotation_before_pause, paused_limb.rotation]
+		player1.attack_frame == frame_before_pause,
+		"hitstop pauses the authoritative combat frame (%d -> %d)" % [frame_before_pause, player1.attack_frame]
 	)
 	await get_tree().create_timer(0.15).timeout
 	_expect_true(player1.is_physics_processing(), "hitstop resumes fighter physics")
@@ -112,30 +110,20 @@ func _ready() -> void:
 	var high_data := player1._attack_data("high", false)
 	high_data["name"] = player1._attacking_limb("high", false)
 	player1._start_attack(high_data)
-	if player1.attack_tween and player1.attack_tween.is_valid():
-		player1.attack_tween.kill()
-		player1.attack_tween = null
-	var strike_limb := player1._get_limb_node(high_data.name)
-	strike_limb.rotation = -player1.attack_facing * float(high_data.swing)
-	strike_limb.scale = Vector2(1.0, float(high_data.extension))
-	player1._update_strike_hitbox()
-	player1._set_hitbox(true)
-	var torso_offset := player2._get_limb_hurtbox("torso").global_position - player2.global_position
-	player2.global_position = player1.hitbox.global_position - torso_offset
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	_expect_true(player1.hitbox.overlaps_area(player2._get_limb_hurtbox("torso")), "high strike overlaps torso in collision test")
-	_expect_true(not player1.hitbox.overlaps_area(player2._get_limb_hurtbox("head")), "high strike does not overlap head in collision test")
+	player1.attack_frame = int(high_data.startup_frames)
+	var high_rect := player1._active_hit_rects()[0]
+	var torso_offset := player2._limb_hurt_rect("torso").get_center() - player2.global_position
+	player2.global_position = high_rect.get_center() - torso_offset
+	_expect_true(high_rect.intersects(player2._limb_hurt_rect("torso"), true), "authored high box overlaps torso in collision test")
+	_expect_true(not high_rect.intersects(player2._limb_hurt_rect("head"), true), "authored high box does not overlap head in collision test")
 	var head_before := float(player2.limb_hp["head"].hp)
 	player1._check_hits()
 	_expect_eq(player2.limb_hp["head"].hp, head_before, "torso-only contact does not redirect damage to head")
 
 	# On an even floor the raised fist endpoint must naturally line up with the
 	# head; the test does not vertically move the victim to manufacture contact.
-	player2.global_position = Vector2(player1.hitbox.global_position.x, player1.global_position.y)
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	_expect_true(player1.hitbox.overlaps_area(player2._get_limb_hurtbox("head")), "raised high strike reaches head on an even floor")
+	player2.global_position = Vector2(high_rect.get_center().x, player1.global_position.y)
+	_expect_true(high_rect.intersects(player2._limb_hurt_rect("head"), true), "authored high box reaches head on an even floor")
 	player1.hit_landed = false
 	player1._check_hits()
 	_expect_true(float(player2.limb_hp["head"].hp) < head_before, "actual head contact damages head")
@@ -145,18 +133,10 @@ func _ready() -> void:
 	var head_kick := player1._attack_data("high", true)
 	head_kick["name"] = player1._attacking_limb("high", true)
 	player1._start_attack(head_kick)
-	if player1.attack_tween and player1.attack_tween.is_valid():
-		player1.attack_tween.kill()
-		player1.attack_tween = null
-	strike_limb = player1._get_limb_node(head_kick.name)
-	strike_limb.rotation = -player1.attack_facing * float(head_kick.swing)
-	strike_limb.scale = Vector2(1.0, float(head_kick.extension))
-	player1._update_strike_hitbox()
-	player1._set_hitbox(true)
-	player2.global_position = Vector2(player1.hitbox.global_position.x, player1.global_position.y)
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	_expect_true(player1.hitbox.overlaps_area(player2._get_limb_hurtbox("head")), "rear-leg head kick reaches head on an even floor")
+	player1.attack_frame = int(head_kick.startup_frames)
+	var kick_rect := player1._active_hit_rects()[0]
+	player2.global_position = Vector2(kick_rect.get_center().x, player1.global_position.y)
+	_expect_true(kick_rect.intersects(player2._limb_hurt_rect("head"), true), "rear-leg head kick reaches head on an even floor")
 	var kick_head_before := float(player2.limb_hp["head"].hp)
 	var kick_torso_before := float(player2.limb_hp["torso"].hp)
 	player1.hit_landed = false
@@ -174,22 +154,22 @@ func _ready() -> void:
 	player1.take_part_hit("head", "high", 1000.0, player2.global_position.x, 0.0, 0.0)
 	_expect_true(player1.limb_hp["head"].gone, "head is destroyed at zero HP")
 	_expect_true(
-		(player1._get_limb_hurtbox("head").get_node("Shape") as CollisionShape2D).disabled,
-		"destroyed head hurtbox is disabled"
+		not player1.has_node("Rig/head/Hurtbox"),
+		"combat no longer depends on legacy Area2D hurtbox nodes"
 	)
 	_expect_eq(player1.state, Player.State.KO, "destroying the head enters KO")
 	_expect_true(did_die[0], "destroying the head emits the fight-ending signal")
 	player1.reset(Vector2(300, 400))
 	_expect_true(
-		not (player1._get_limb_hurtbox("head").get_node("Shape") as CollisionShape2D).disabled,
-		"round reset restores detached hurtboxes"
+		not player1.limb_hp["head"].gone,
+		"round reset restores detached combat regions"
 	)
 
 	player2.limb_hp["leg_l"].gone = true
 	player2.limb_hp["leg_r"].gone = true
 	player2._update_body_collision()
 	var legless_shape := player2.body_shape.shape as RectangleShape2D
-	_expect_eq(legless_shape.size, Vector2(44.0, 38.0), "legless fighter uses a low body collision shape")
+	_expect_eq(legless_shape.size, Vector2(30.0, 38.0), "legless fighter uses a low pelvis collision shape")
 	_expect_eq(player2.body_shape.position, Vector2(0.0, 21.0), "legless collision follows the lowered rig")
 
 	if failures == 0:

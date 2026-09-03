@@ -27,81 +27,10 @@ const LIMB_MAX := {
 }
 const LIMBS := ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"]
 
-## Box coordinates use the original fighter-space units and are scaled once to
-## world pixels. Each grounded normal reaches inward past pushbox contact.
-const ATTACKS := {
-	"high": {
-		false: {
-			"band": "high", "heavy": false, "chain_rank": 0,
-			"startup_frames": 5, "active_frames": 3, "recovery_frames": 8,
-			"damage": 5.5, "limb_damage": 6.0, "hitstun_frames": 17,
-			"blockstun_frames": 11, "hitstop_frames": 4,
-			"guard_damage": 7.0, "chip_ratio": 0.0, "guard_type": "high",
-			"knockback": 150.0, "launch": 0.0, "knockdown": false,
-			"contact_size": Vector2(38, 18), "extension": 2.15, "swing": 1.62,
-			"travel": Vector3(7.0, 4.0, 0.0),
-			"hitboxes": [{"offset": Vector2(35, -32), "size": Vector2(38, 18)}],
-		},
-		true: {
-			"band": "high", "heavy": true, "chain_rank": 3,
-			"startup_frames": 18, "active_frames": 5, "recovery_frames": 24,
-			"damage": 15.0, "limb_damage": 18.0, "hitstun_frames": 36,
-			"blockstun_frames": 18, "hitstop_frames": 9,
-			"guard_damage": 20.0, "chip_ratio": 0.08, "guard_type": "overhead",
-			"knockback": 330.0, "launch": -180.0, "knockdown": true,
-			"contact_size": Vector2(60, 22), "extension": 2.0, "swing": 1.95,
-			"travel": Vector3(12.0, 7.0, 0.0),
-			"hitboxes": [{"offset": Vector2(43, -31), "size": Vector2(60, 22)}],
-		},
-	},
-	"mid": {
-		false: {
-			"band": "mid", "heavy": false, "chain_rank": 1,
-			"startup_frames": 7, "active_frames": 4, "recovery_frames": 12,
-			"damage": 7.0, "limb_damage": 7.5, "hitstun_frames": 22,
-			"blockstun_frames": 13, "hitstop_frames": 5,
-			"guard_damage": 9.0, "chip_ratio": 0.0, "guard_type": "mid",
-			"knockback": 180.0, "launch": 0.0, "knockdown": false,
-			"contact_size": Vector2(44, 24), "extension": 2.35, "swing": 1.1,
-			"travel": Vector3(9.0, 5.0, 0.0),
-			"hitboxes": [{"offset": Vector2(33, -10), "size": Vector2(44, 24)}],
-		},
-		true: {
-			"band": "mid", "heavy": true, "chain_rank": 3,
-			"startup_frames": 12, "active_frames": 5, "recovery_frames": 19,
-			"damage": 12.0, "limb_damage": 14.0, "hitstun_frames": 29,
-			"blockstun_frames": 16, "hitstop_frames": 7,
-			"guard_damage": 16.0, "chip_ratio": 0.06, "guard_type": "mid",
-			"knockback": 270.0, "launch": -80.0, "knockdown": false,
-			"contact_size": Vector2(60, 26), "extension": 3.25, "swing": 1.24,
-			"travel": Vector3(13.0, 7.0, 0.0),
-			"hitboxes": [{"offset": Vector2(40, -9), "size": Vector2(60, 26)}],
-		},
-	},
-	"low": {
-		false: {
-			"band": "low", "heavy": false, "chain_rank": 2,
-			"startup_frames": 9, "active_frames": 4, "recovery_frames": 15,
-			"damage": 8.0, "limb_damage": 9.0, "hitstun_frames": 25,
-			"blockstun_frames": 14, "hitstop_frames": 6,
-			"guard_damage": 11.0, "chip_ratio": 0.0, "guard_type": "low",
-			"knockback": 210.0, "launch": 0.0, "knockdown": false,
-			"contact_size": Vector2(66, 24), "extension": 2.0, "swing": 1.14,
-			"travel": Vector3(8.0, 5.0, 0.0),
-			"hitboxes": [{"offset": Vector2(48, 21), "size": Vector2(66, 24)}],
-		},
-		true: {
-			"band": "low", "heavy": true, "chain_rank": 3,
-			"startup_frames": 15, "active_frames": 6, "recovery_frames": 22,
-			"damage": 14.0, "limb_damage": 17.0, "hitstun_frames": 34,
-			"blockstun_frames": 17, "hitstop_frames": 8,
-			"guard_damage": 19.0, "chip_ratio": 0.07, "guard_type": "low",
-			"knockback": 310.0, "launch": -110.0, "knockdown": true,
-			"contact_size": Vector2(75, 28), "extension": 2.15, "swing": 1.28,
-			"travel": Vector3(11.0, 8.0, 0.0),
-			"hitboxes": [{"offset": Vector2(50, 20), "size": Vector2(75, 28)}],
-		},
-	},
+const MOVES := {
+	"high": {false: preload("res://data/moves/high_normal.tres"), true: preload("res://data/moves/high_heavy.tres")},
+	"mid": {false: preload("res://data/moves/mid_normal.tres"), true: preload("res://data/moves/mid_heavy.tres")},
+	"low": {false: preload("res://data/moves/low_normal.tres"), true: preload("res://data/moves/low_heavy.tres")},
 }
 
 signal died
@@ -112,13 +41,14 @@ enum State { IDLE, STANCE, ATTACK, HITSTUN, BLOCKSTUN, KNOCKDOWN, KO }
 @export var player_number: int = 1
 @export var body_color: Color = Color(0.85, 0.2, 0.2)
 @export var show_debug_rig := true
+@export var standing_pushbox_width := 34.0
+@export var airborne_pushbox_width := 30.0
+@export var legless_pushbox_width := 30.0
 
 @onready var rig: Node2D = $Rig
 @onready var face: ColorRect = $Rig/Face
 @onready var stance_marker: ColorRect = $Rig/StanceMarker
 @onready var body_shape: CollisionShape2D = $CollisionShape2D
-@onready var hitbox: Area2D = $Hitbox
-@onready var hitbox_shape: CollisionShape2D = $Hitbox/HitboxShape
 
 var health := 100.0
 var guard := GUARD_MAX
@@ -144,28 +74,27 @@ var input_locked := false
 var air_hits := 0
 var hurt_tilt := 0.0
 var stick_was_up := false
-var attack_tween: Tween
+var active_move: FighterMoveData
 var buffered_band := ""
 var buffered_heavy := false
 var input_buffer_frames := 0
 var input_buffer_timer := 0.0
 var guard_recover_delay_frames := 0
 var combo_chain_rank := -1
+var animation_timings: Dictionary = {}
 
 
 func _ready() -> void:
 	scale = Vector2(SCALE, SCALE)
 	rig.visible = show_debug_rig
 	body_shape.shape = body_shape.shape.duplicate()
-	hitbox_shape.shape = hitbox_shape.shape.duplicate()
 	_setup_limbs()
 	_snap_stance_visuals()
-	_set_hitbox(false)
 
 
 func _physics_process(delta: float) -> void:
 	_capture_attack_input()
-	if not input_locked and state == State.IDLE and buffered_band == "" and Input.is_action_just_pressed(_action("stance")):
+	if not input_locked and state == State.IDLE and buffered_band == "" and not _crouch_guard_held() and Input.is_action_just_pressed(_action("stance")):
 		_start_stance_change()
 	if state != State.ATTACK:
 		_update_facing()
@@ -207,6 +136,14 @@ func _apply_idle() -> void:
 	if input_locked:
 		velocity.x = 0.0
 		return
+	# Down is a dedicated stationary low guard. It always wins over buffered
+	# offense, jumping, stance changes, and horizontal input. If the input begins
+	# on the landing frame, horizontal motion still cannot leak through.
+	if _crouch_guard_held():
+		velocity.x = 0.0
+		combo_chain_rank = -1
+		_clear_input_buffer()
+		return
 	if buffered_band != "":
 		_begin_buffered_attack(false)
 		return
@@ -225,19 +162,45 @@ func _apply_idle() -> void:
 
 
 func _attack_data(band: String, heavy: bool) -> Dictionary:
-	var data: Dictionary = ATTACKS[band][heavy].duplicate(true)
-	data["windup"] = float(data.startup_frames) / COMBAT_FPS
-	data["active"] = float(data.active_frames) / COMBAT_FPS
-	data["recovery"] = float(data.recovery_frames) / COMBAT_FPS
-	data["forward_speed"] = _phase_speed(data, 0)
-	return data
+	var move := (MOVES[band][heavy] as FighterMoveData).duplicate(true) as FighterMoveData
+	_apply_animation_timing(move)
+	return move.to_runtime_data()
+
+
+func configure_animation_timing(semantic: String, duration_seconds: float, contact_ratio: float) -> void:
+	var total_frames := maxi(3, roundi(duration_seconds * COMBAT_FPS))
+	var contact_frame := clampi(roundi(duration_seconds * contact_ratio * COMBAT_FPS), 1, total_frames - 2)
+	animation_timings[semantic] = {
+		"total_frames": total_frames,
+		"contact_frame": contact_frame,
+	}
+
+
+func _apply_animation_timing(move: FighterMoveData) -> void:
+	if move == null or not animation_timings.has(move.animation_semantic):
+		return
+	var timing: Dictionary = animation_timings[move.animation_semantic]
+	var total_frames := int(timing.total_frames)
+	var startup_frames := int(timing.contact_frame)
+	var active_frames := mini(move.active_frames, total_frames - startup_frames - 1)
+	active_frames = maxi(1, active_frames)
+	move.startup_frames = startup_frames
+	move.active_frames = active_frames
+	move.recovery_frames = maxi(1, total_frames - startup_frames - active_frames)
+	# Active collision begins at the measured contact pose and lasts for the
+	# authored gameplay window. The visible swing and deterministic hit window
+	# therefore share one clock without deriving collision from skeleton bones.
+	for box in move.hitboxes:
+		box.start_frame = move.startup_frames
+		box.end_frame = move.startup_frames + move.active_frames - 1
 
 
 func estimated_attack_reach(band: String, heavy: bool) -> float:
 	var data := _attack_data(band, heavy)
+	var move := data.move_resource as FighterMoveData
 	var maximum := 0.0
-	for box in data.hitboxes:
-		maximum = maxf(maximum, (float(box.offset.x) + float(box.size.x) * 0.5) * SCALE)
+	for box in move.hitboxes:
+		maximum = maxf(maximum, (box.center.x + box.size.x * 0.5) * SCALE)
 	return maximum
 
 
@@ -269,24 +232,46 @@ func _begin_buffered_attack(is_cancel: bool) -> void:
 		return
 	data["name"] = swing_limb
 	if swing_limb != requested:
+		data = _desperation_move(band).to_runtime_data()
+		data["name"] = swing_limb
 		data["fallback"] = true
-		data["startup_frames"] = 7
-		data["active_frames"] = 3
-		data["recovery_frames"] = 13
-		data["windup"] = 7.0 / COMBAT_FPS
-		data["active"] = 3.0 / COMBAT_FPS
-		data["recovery"] = 13.0 / COMBAT_FPS
-		data["damage"] = 4.0
-		data["limb_damage"] = 4.0
-		data["hitstun_frames"] = 17
-		data["hitboxes"] = [{"offset": Vector2(24, -17), "size": Vector2(32, 30)}]
 		_float_text(global_position + Vector2(0, -88.0), "DESPERATION", Color(1.0, 0.65, 0.2))
 	_start_attack(data)
+
+
+func _desperation_move(band: String) -> FighterMoveData:
+	var move := FighterMoveData.new()
+	move.move_id = "desperation_%s" % band
+	move.band = band
+	move.animation_semantic = "%s_normal" % band
+	move.startup_frames = 7
+	move.active_frames = 3
+	move.recovery_frames = 13
+	move.damage = 4.0
+	move.limb_damage = 4.0
+	move.hitstun_frames = 17
+	move.blockstun_frames = 10
+	move.hitstop_frames = 4
+	move.guard_damage = 6.0
+	var box := CombatBoxData.new()
+	box.center = Vector2(24, -17)
+	box.size = Vector2(32, 30)
+	box.region = "torso"
+	box.start_frame = move.startup_frames
+	box.end_frame = move.startup_frames + move.active_frames - 1
+	move.hitboxes = [box]
+	_apply_animation_timing(move)
+	return move
 
 
 func _start_attack(data: Dictionary) -> void:
 	state = State.ATTACK
 	attack = data.duplicate(true)
+	active_move = attack.get("move_resource") as FighterMoveData
+	if active_move == null:
+		state = State.IDLE
+		attack.clear()
+		return
 	attack_phase = "startup"
 	attack_time = 0.0
 	attack_frame = 0
@@ -295,67 +280,33 @@ func _start_attack(data: Dictionary) -> void:
 	attack_was_blocked = false
 	attack_facing = facing
 	combo_chain_rank = int(attack.chain_rank)
-	_set_hitbox(false)
-	_anim_attack(attack)
-	_update_strike_hitbox()
-
-
-func _anim_attack(data: Dictionary) -> void:
-	var limb_node: Node2D = _get_limb_node(data.name)
-	if attack_tween and attack_tween.is_valid():
-		attack_tween.kill()
-	limb_node.rotation = 0.0
-	limb_node.scale = Vector2.ONE
-	attack_tween = create_tween()
-	attack_tween.set_trans(Tween.TRANS_QUAD)
-	attack_tween.set_ease(Tween.EASE_OUT)
-	attack_tween.tween_property(limb_node, "rotation", -attack_facing * float(data.swing), float(data.windup) + float(data.active))
-	attack_tween.parallel().tween_property(limb_node, "scale", Vector2(1.0, float(data.extension)), float(data.windup) + float(data.active))
-	attack_tween.set_ease(Tween.EASE_IN_OUT)
-	attack_tween.tween_property(limb_node, "rotation", 0.0, float(data.recovery))
-	attack_tween.parallel().tween_property(limb_node, "scale", Vector2.ONE, float(data.recovery))
-
-
-func _update_strike_hitbox() -> void:
-	if attack.is_empty() or not attack.has("hitboxes"):
-		return
-	var box: Dictionary = attack.hitboxes[0]
-	hitbox_shape.shape.size = Vector2(box.size)
-	hitbox.global_position = global_position + Vector2(float(box.offset.x) * float(attack_facing) * SCALE, float(box.offset.y) * SCALE)
-	hitbox.global_rotation = 0.0
 
 
 func _tick_attack() -> void:
-	var startup := int(attack.startup_frames)
-	var active := int(attack.active_frames)
-	var recovery := int(attack.recovery_frames)
+	if active_move == null:
+		_finish_attack()
+		return
+	if attack_frame >= active_move.total_frames():
+		_finish_attack()
+		return
+	var startup := active_move.startup_frames
+	var active := active_move.active_frames
+	var recovery := active_move.recovery_frames
+	velocity.x = float(attack_facing) * active_move.root_delta_at(attack_frame) * COMBAT_FPS
 	if attack_frame < startup:
 		attack_phase = "startup"
-		velocity.x = float(attack_facing) * _phase_speed(attack, 0)
 	elif attack_frame < startup + active:
 		attack_phase = "active"
-		velocity.x = float(attack_facing) * _phase_speed(attack, 1)
-		_set_hitbox(true)
-		_update_strike_hitbox()
 		if not hit_landed:
 			_check_hits()
 	else:
 		attack_phase = "recovery"
-		velocity.x = float(attack_facing) * _phase_speed(attack, 2)
-		_set_hitbox(false)
 		_try_attack_cancel()
 		if attack_frame >= startup + active + recovery:
 			_finish_attack()
 			return
 	attack_frame += 1
 	attack_time = float(attack_frame) / COMBAT_FPS
-
-
-func _phase_speed(data: Dictionary, phase_index: int) -> float:
-	var travel: Vector3 = data.get("travel", Vector3.ZERO)
-	var distance: float = [travel.x, travel.y, travel.z][phase_index]
-	var frames: int = [int(data.startup_frames), int(data.active_frames), int(data.recovery_frames)][phase_index]
-	return distance * COMBAT_FPS / maxf(1.0, float(frames))
 
 
 func _try_attack_cancel() -> void:
@@ -389,7 +340,7 @@ func _check_hits() -> void:
 	var payload := attack.duplicate(true)
 	payload["target"] = target
 	payload["source_x"] = global_position.x
-	payload["contact_position"] = victim._get_limb_hurtbox(target).global_position
+	payload["contact_position"] = victim.limb_contact_position(target)
 	var arena := get_parent()
 	if arena != null and arena.has_method("queue_combat_hit"):
 		arena.queue_combat_hit(self, victim, payload)
@@ -400,20 +351,26 @@ func _check_hits() -> void:
 
 func _active_hit_rects() -> Array[Rect2]:
 	var result: Array[Rect2] = []
-	for authored in attack.get("hitboxes", []):
-		var data: Dictionary = authored
-		var size := Vector2(data.size) * SCALE
-		var center := global_position + Vector2(float(data.offset.x) * float(attack_facing) * SCALE, float(data.offset.y) * SCALE)
-		result.append(Rect2(center - size * 0.5, size))
+	if active_move == null:
+		return result
+	for box in active_move.active_hitboxes(attack_frame):
+		result.append(box.world_rect(global_position, attack_facing, SCALE))
 	return result
 
 
 func _limb_hurt_rect(limb_name: String) -> Rect2:
-	var area := _get_limb_hurtbox(limb_name)
-	var shape_node := area.get_node("Shape") as CollisionShape2D
-	var rect_shape := shape_node.shape as RectangleShape2D
-	var size := rect_shape.size * shape_node.global_scale.abs()
-	return Rect2(area.global_position - size * 0.5, size)
+	if state == State.ATTACK and active_move != null:
+		var override := active_move.hurtbox_override(limb_name, attack_frame)
+		if override != null:
+			return override.world_rect(global_position, attack_facing, SCALE)
+	var center := FighterCollisionProfile.local_center(limb_name, stance, facing, _is_legless())
+	var size := FighterCollisionProfile.local_size(limb_name) * SCALE
+	var world_center := global_position + center * SCALE
+	return Rect2(world_center - size * 0.5, size)
+
+
+func limb_contact_position(limb_name: String) -> Vector2:
+	return _limb_hurt_rect(limb_name).get_center()
 
 
 func notify_attack_result(blocked: bool) -> void:
@@ -458,7 +415,6 @@ func receive_combat_hit(data: Dictionary) -> bool:
 		limb_broken = true
 		if limb_name != "torso":
 			_get_limb_body(limb_name).visible = false
-		_set_limb_hurtbox_enabled(limb_name, false)
 	var source_x := float(data.get("source_x", global_position.x))
 	var dir_away := 1.0 if global_position.x >= source_x else -1.0
 	velocity = Vector2(dir_away * float(data.get("knockback", 160.0)), float(data.get("launch", 0.0)))
@@ -468,9 +424,8 @@ func receive_combat_hit(data: Dictionary) -> bool:
 	state = State.KNOCKDOWN if bool(data.get("knockdown", false)) else State.HITSTUN
 	if state == State.KNOCKDOWN:
 		state_frames_left = max(state_frames_left, 38)
-	_set_hitbox(false)
 	flash_timer = 0.10
-	var hit_position: Vector2 = data.get("contact_position", _get_limb_hurtbox(limb_name).global_position)
+	var hit_position: Vector2 = data.get("contact_position", limb_contact_position(limb_name))
 	_flash_limb(limb_name)
 	_spawn_impact(hit_position, bool(data.get("heavy", false)))
 	_float_text(hit_position, "-%d %s" % [roundi(damage * vitality_multiplier), limb_name], Color(1, 0.9, 0.3))
@@ -495,7 +450,7 @@ func take_part_hit(limb_name: String, band: String, dmg: float, source_x: float,
 		"knockback": kb, "launch": 0.0,
 		"hitstun_frames": maxi(1, roundi(stun * COMBAT_FPS)),
 		"hitstop_frames": 4, "heavy": dmg >= 10.0, "knockdown": false,
-		"contact_position": _get_limb_hurtbox(limb_name).global_position,
+		"contact_position": limb_contact_position(limb_name),
 	})
 
 
@@ -539,7 +494,7 @@ func _can_block_attack(guard_type: String) -> bool:
 
 
 func _block_mode() -> String:
-	if Input.is_action_pressed(_action("block")):
+	if _crouch_guard_held():
 		return "crouch"
 	if _move_dir() * float(facing) < -0.3:
 		return "stand"
@@ -569,18 +524,14 @@ func _tick_knockdown() -> void:
 
 
 func _interrupt_attack() -> void:
-	if attack_tween and attack_tween.is_valid():
-		attack_tween.kill()
-	attack_tween = null
-	_set_hitbox(false)
-	for limb_name in LIMBS:
-		_get_limb_node(limb_name).rotation = 0.0
-		_get_limb_node(limb_name).scale = Vector2.ONE
+	attack.clear()
+	active_move = null
 
 
 func _finish_attack() -> void:
 	_interrupt_attack()
 	attack.clear()
+	active_move = null
 	attack_phase = ""
 	attack_frame = 0
 	state = State.IDLE
@@ -601,19 +552,8 @@ func _tick_guard() -> void:
 		guard = minf(GUARD_MAX, guard + GUARD_REGEN_PER_FRAME)
 
 
-func _set_hitbox(active: bool) -> void:
-	hitbox_shape.disabled = not active
-
-
-func _set_limb_hurtbox_enabled(limb_name: String, enabled: bool) -> void:
-	var shape := _get_limb_hurtbox(limb_name).get_node("Shape") as CollisionShape2D
-	shape.disabled = not enabled
-
-
 func _setup_limbs() -> void:
 	for limb_name in LIMBS:
-		var hurtbox: Area2D = _get_limb_hurtbox(limb_name)
-		hurtbox.set_meta("limb", limb_name)
 		limb_hp[limb_name] = {"hp": LIMB_MAX[limb_name], "gone": false}
 	_refresh_limb_colors()
 
@@ -634,10 +574,6 @@ func _get_limb_body(limb_name: String) -> ColorRect:
 	return get_node("Rig/" + limb_name + "/Body")
 
 
-func _get_limb_hurtbox(limb_name: String) -> Area2D:
-	return get_node("Rig/" + limb_name + "/Hurtbox")
-
-
 func _get_limb_node(limb_name: String) -> Node2D:
 	return get_node("Rig/" + limb_name)
 
@@ -651,10 +587,7 @@ func front_side() -> String:
 
 
 func current_target_stance() -> int:
-	var toward := float(facing)
-	var right_progress := _get_limb_node("leg_r").global_position.x * toward
-	var left_progress := _get_limb_node("leg_l").global_position.x * toward
-	return 1 if right_progress >= left_progress else -1
+	return stance
 
 
 func _apply_stance_visuals(delta: float) -> void:
@@ -709,7 +642,7 @@ func _is_legless() -> bool:
 
 func _mobility_ratio() -> float:
 	var legs_lost := int(bool(limb_hp["leg_l"].gone)) + int(bool(limb_hp["leg_r"].gone))
-	return [1.0, 0.62, 0.28][legs_lost]
+	return [1.0, 0.58, 0.0][legs_lost]
 
 
 func _move_speed() -> float:
@@ -741,17 +674,16 @@ func reset(start_pos: Vector2) -> void:
 	combo_chain_rank = -1
 	rig.rotation = 0.0
 	rig.position = Vector2.ZERO
-	_set_hitbox(false)
 	rig.self_modulate = Color.WHITE
 	rig.modulate = Color.WHITE
 	_interrupt_attack()
 	attack.clear()
+	active_move = null
 	_clear_input_buffer()
 	for limb_name in LIMBS:
 		limb_hp[limb_name].hp = LIMB_MAX[limb_name]
 		limb_hp[limb_name].gone = false
 		_get_limb_body(limb_name).visible = true
-		_set_limb_hurtbox_enabled(limb_name, true)
 	_refresh_limb_colors()
 	_snap_stance_visuals()
 
@@ -817,7 +749,7 @@ func _heavy_held() -> bool:
 
 
 func _capture_attack_input() -> void:
-	if input_locked or state == State.KO: return
+	if input_locked or state == State.KO or _crouch_guard_held(): return
 	for candidate in ["high", "mid", "low"]:
 		if Input.is_action_just_pressed(_action(candidate)):
 			buffered_band = candidate
@@ -844,20 +776,25 @@ func _clear_input_buffer() -> void:
 func _update_body_collision() -> void:
 	var rect := body_shape.shape as RectangleShape2D
 	if _is_legless():
-		rect.size = Vector2(44.0, 38.0)
+		rect.size = Vector2(legless_pushbox_width, 38.0)
 		body_shape.position = Vector2(0.0, 21.0)
 	elif not is_on_floor():
-		rect.size = Vector2(42.0, 68.0)
+		rect.size = Vector2(airborne_pushbox_width, 68.0)
 		body_shape.position = Vector2.ZERO
 	else:
-		rect.size = Vector2(50.0, 80.0)
+		rect.size = Vector2(standing_pushbox_width, 80.0)
 		body_shape.position = Vector2.ZERO
 
 
-func set_hitstop_paused(paused: bool) -> void:
-	if attack_tween == null or not attack_tween.is_valid(): return
-	if paused: attack_tween.pause()
-	else: attack_tween.play()
+func pushbox_half_width() -> float:
+	var rect := body_shape.shape as RectangleShape2D
+	return rect.size.x * absf(scale.x) * 0.5
+
+
+func set_hitstop_paused(_paused: bool) -> void:
+	# Combat has no animation Tween anymore. The 3D adapter seeks its imported
+	# clip from attack_frame and is paused independently by Effects.
+	pass
 
 
 func _action(action_name: String) -> StringName:
@@ -866,6 +803,12 @@ func _action(action_name: String) -> StringName:
 
 func _pad_device() -> int:
 	return player_number - 1
+
+
+func _crouch_guard_held() -> bool:
+	if Input.is_action_pressed(_action("block")):
+		return true
+	return Input.get_joy_axis(_pad_device(), JOY_AXIS_LEFT_Y) > 0.5
 
 
 func _update_facing() -> void:

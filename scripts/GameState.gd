@@ -33,14 +33,16 @@ const CHARACTERS := [
 		# Match the legacy fighter's roughly 2.6 m presentation envelope while
 		# keeping the prepared asset itself at a conventional 1.76 m height.
 		"model_scale": 1.5,
+		"standing_pushbox_width": 34.0,
+		"airborne_pushbox_width": 30.0,
+		"legless_pushbox_width": 30.0,
 		"model_facing": 1,
 		# Mixamo characters are authored on the camera axis. Turn that axis onto
 		# gameplay X; FacingPivot supplies the opposite 180-degree turn for P2.
 		"model_rotation_y": 90.0,
 		"animation_map": SHARED_ANIMATION_MAP,
-		# Visual extension/contact points measured from the supplied clips. The
-		# adapter maps each point to the existing gameplay windup without changing
-		# attack data, hitboxes, damage, or recovery duration.
+		# Authored contact points measured from the supplied clips. Runtime frame
+		# data places startup/active at that pose while playback remains at 1x.
 		"animation_contact_ratios": SHARED_CONTACT_RATIOS,
 	},
 	{
@@ -49,6 +51,11 @@ const CHARACTERS := [
 		"model_path": "res://assets/models/robot/robot_prepared.glb",
 		"animations_dir": "res://assets/models/robot/animations",
 		"model_scale": 1.5,
+		# The robot's torso is materially broader than the humanoid mesh. Its
+		# stable core collision is character data, while limbs may still overlap.
+		"standing_pushbox_width": 88.0,
+		"airborne_pushbox_width": 78.0,
+		"legless_pushbox_width": 82.0,
 		"model_facing": 1,
 		"model_rotation_y": 90.0,
 		"animation_map": SHARED_ANIMATION_MAP,
